@@ -1,0 +1,19 @@
+[Unit]
+Description=Precision Entry C candidate alert scanner
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=YOUR_LINUX_USER
+WorkingDirectory=/opt/Precision-test
+EnvironmentFile=/etc/precision-c-scanner.env
+ExecStart=/opt/Precision-test/.venv/bin/python /opt/Precision-test/entry_c.py --poll-seconds 60
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/Precision-test
+
+[Install]
+WantedBy=multi-user.target

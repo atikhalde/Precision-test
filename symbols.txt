@@ -1,0 +1,5 @@
+# One NSE symbol per line. The scanner appends .NS automatically.
+# Examples:
+# RELIANCE
+# TCS
+# INFY
