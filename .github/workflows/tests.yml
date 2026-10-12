@@ -2,6 +2,12 @@ name: test-entry-c
 
 on:
   workflow_dispatch:
+    inputs:
+      send_telegram_test:
+        description: "Send one Telegram connectivity test (not a trade alert)"
+        required: false
+        type: boolean
+        default: false
   push:
     branches: [main]
   pull_request:
@@ -18,7 +24,6 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
-          cache: pip
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
       - name: Run unit tests
@@ -36,3 +41,11 @@ jobs:
           python -m unittest discover -s "$test_dir" -v
       - name: Compile scanner
         run: python -m py_compile entry_c.py ob_precision.py indicators.py
+
+      - name: Send optional Telegram connectivity test
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.send_telegram_test }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DRY_RUN: "0"
+        run: python entry_c.py --symbols RELIANCE --test-telegram
