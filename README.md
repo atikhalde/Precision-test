@@ -17,7 +17,13 @@ C alerts include a provisional 26W stop and a provisional target (the highest hi
 
 ### Important timing limitation
 
-An end-of-day alert cannot guarantee execution at the just-printed close. The default alert window begins at **15:15 Asia/Kolkata** so a candidate can be noticed before the NSE close; its candle shape and price are still provisional. Earlier alerts are possible by setting `C_SIGNAL_START` earlier, but increase false candidates. yfinance is not a guaranteed real-time or execution-grade feed; stale/missing intraday data is skipped. No zero-latency or fill-price guarantee is made.
+An end-of-day alert cannot guarantee execution at the just-printed close. The default alert window begins at **15:15 Asia/Kolkata** so a candidate can be noticed before the NSE close; its candle shape and price are still provisional. Earlier alerts are possible by setting `C_SIGNAL_START` earlier, but increase false candidates.
+
+**Yahoo's NSE intraday feed normally lags the exchange by about 15 minutes.** A quote is therefore never "five minutes old" inside the candidate window, and a very small `MAX_QUOTE_AGE_SECONDS` rejects every symbol — the scan then evaluates nothing and (inside the window) exits non-zero. The default is now `1200` seconds; a quote older than that is still used, but the delay is warned about in the log and stated in the alert (`Candle status: still forming — data as of ... IST; provider quote was ~N min behind the exchange`). Quotes older than `HARD_QUOTE_STALE_SECONDS` (3600s) or from a previous session are always skipped as unusable.
+
+Because the 15:15–15:30 IST window is short and provider data is delayed, the scanner also makes a **settled-candle pass**: between the 15:30 IST close and `C_POST_CLOSE_UNTIL` (default **17:00** IST) it evaluates the session's *final* daily bar. That pass uses no intraday data, cannot double-send an alert already sent for the same symbol and session (the candidate ledger and the per-day alert ledger both dedupe), and also lets pending candidates be confirmed/superseded/expired/invalidated on the same evening. The alert says the candle is settled and that the entry reference is that close. Set `C_POST_CLOSE_UNTIL=off` to disable it.
+
+yfinance is not a guaranteed real-time or execution-grade feed; stale/missing intraday data is skipped. No zero-latency or fill-price guarantee is made.
 
 ## Rule and data notes
 
@@ -78,7 +84,15 @@ After confirming the messages and symbols, set `DRY_RUN=0` in `.env` and run con
 python entry_c.py --poll-seconds 60
 ```
 
-Or use `--symbols-file symbols.txt`. The scanner checks yfinance data freshness (default maximum age 5 minutes; adjust with `MAX_QUOTE_AGE_SECONDS`) and will skip stale intraday snapshots. It maintains its own `state_c.json`; that state is ignored by Git and is not shared with A/B.
+Or use `--symbols-file symbols.txt`. The scanner checks yfinance data freshness (default maximum age 20 minutes, above the ~15-minute NSE feed delay; adjust with `MAX_QUOTE_AGE_SECONDS`) and skips quotes that are unusable or from a previous session. It maintains its own `state_c.json`; that state is ignored by Git and is not shared with A/B.
+
+To see exactly what the scanner would do for every symbol without sending anything, run the diagnostic probe (it is also available as the `diagnose-entry-c` workflow):
+
+```bash
+python tools/diag_probe.py --as-of 15:15 --quote-lag 900 --post-close-at 16:00
+```
+
+It prints the raw Yahoo feed delay, each symbol's 26W breakout state, the candle tests, and a replay of the real `scan_pass` at 15:15 IST both with and without an emulated 15-minute provider delay, plus the settled-candle replay after the close.
 
 For a long-running live process, use a VPS/systemd service (example: `precision-c-scanner.service.example`). A separate `scan-entry-c` GitHub Actions workflow now performs best-effort scheduled scans; see below. Scheduled Actions are not a dependable low-latency market scanner.
 
@@ -98,9 +112,26 @@ Required repository Actions secrets (Settings → Secrets and variables → Acti
 
 These are the same names used by the existing connectivity test. Missing secrets
 or an empty symbol list fail the scan visibly. Optional repository **variables**:
-`C_SIGNAL_START` (default `15:15` IST), `MAX_QUOTE_AGE_SECONDS` (300),
-`ACCOUNT_CAPITAL_INR`, and `RISK_PER_TRADE_PCT` (1.0). Earlier C windows change
-strategy timing and increase provisional-candle risk; they are not required.
+`C_SIGNAL_START` (default `15:15` IST), `C_POST_CLOSE_UNTIL` (default `17:00`
+IST; `0`/`off` disables the settled-candle pass), `MAX_QUOTE_AGE_SECONDS`
+(`1200`, keep it above the ~15-minute Yahoo NSE delay), `ACCOUNT_CAPITAL_INR`,
+and `RISK_PER_TRADE_PCT` (1.0). Earlier C windows change strategy timing and
+increase provisional-candle risk; they are not required.
+
+Every run writes the per-symbol reasons into the run summary and as run
+annotations, so a day with no alert can be explained without downloading the
+raw log. `diagnose-entry-c` (Actions → Run workflow) is a read-only probe: it
+sends no alerts, never touches the ledger, and replays the window against the
+current data. Set its `send_test_message` input (or `test-entry-c`'s
+`send_telegram_test` input) to send one Telegram connectivity message — that is
+the only way this workflow writes to your chat, and it is never a trade signal.
+
+**Scheduling reality:** the `*/5 3-10 * * 1-5` cron is retained, but GitHub did
+not execute a single scheduled run in this repository. Live runs are driven by
+whatever dispatches the workflow (`workflow_dispatch`). A dispatcher aligned to
+UTC quarter-hours fires at 15:15 IST and 15:30 IST — inside the candidate window
+and at the close — which is why the settled-candle pass matters: it gives the
+session a second chance on the very next poll.
 
 Each live run restores the latest `entry-c-live-state` artifact and uploads the
 updated ledger, including any deliveries completed before a later failure.
@@ -116,10 +147,17 @@ can resend an alert. Telegram network timeouts also cannot guarantee exactly-onc
 delivery. Do not run a separate VPS sender with a different
 ledger against the same watchlist/chat unless duplicate alerts are acceptable.
 
-Logs show each symbol's skip reason (pre-window, missing/stale data, no breakout,
-already-confirmed OB, nonqualifying candle, or tracked candidate). One-shot
-exceptions and complete data outages fail the workflow instead of showing a
-misleading green result. No qualifying candidate is a normal successful scan.
+Logs show each symbol's skip reason (pre-window, missing/other-session data,
+delayed quote, no active 26-week breakout, already-confirmed OB, nonqualifying
+candle, or tracked candidate) with the numbers behind it, and the run ends with
+a one-line tally such as
+`Scan complete: 3 symbols; daily_available=3 usable_quotes=3 state_changed=False; no_breakout=3`.
+A delayed-but-current-session quote is used with a warning, not treated as a
+failure. Complete data outages, unusable intraday data inside the candidate
+window, and one-shot exceptions still fail the workflow instead of showing a
+misleading green result. No qualifying candidate is a normal successful scan —
+and with a watchlist that has no active 26-week breakout, no alert is the
+correct outcome.
 
 **Timing limitation:** Actions may queue, delay, or drop scheduled jobs, and
 queued concurrent runs may be replaced by GitHub. Even a five-minute schedule

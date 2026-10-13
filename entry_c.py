@@ -18,6 +18,7 @@ import math
 import os
 import sys
 import time as time_module
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
@@ -31,10 +32,22 @@ IST = ZoneInfo("Asia/Kolkata")
 NSE_OPEN = time(9, 15)
 NSE_CLOSE = time(15, 30)
 DEFAULT_C_START = time(15, 15)  # near the candidate candle's close, but still provisional
+# After the NSE close, today's candle is settled: it is re-checked so a missed
+# 15:15-15:30 slot (or a delayed provider) cannot silently lose the session.
+DEFAULT_POST_CLOSE_UNTIL = time(17, 0)
 DEFAULT_POLL_SECONDS = 60
 DEFAULT_LOOKBACK = "2y"
 DEFAULT_STATE_FILE = ROOT / "state_c.json"
 TIME_STOP_SESSIONS = 90
+# Yahoo serves NSE intraday bars roughly 15 minutes behind the exchange, so a
+# five-minute freshness gate can never pass inside the 15:15-15:30 IST window.
+# The limit only controls when a delayed quote is reported; it is not a hard cut
+# (see HARD_QUOTE_STALE_SECONDS and quote_status()).
+DEFAULT_MAX_QUOTE_AGE_SECONDS = 1200
+# Beyond this age a snapshot cannot be assumed to describe the current session.
+HARD_QUOTE_STALE_SECONDS = 3600
+# Retry a handful of symbols individually when a batch download drops them.
+INDIVIDUAL_RETRY_LIMIT = 10
 
 # Daily candles are static during the session; only refresh them on a new NSE
 # session. Re-downloading two years of history every poll would invite throttling.
@@ -341,11 +354,21 @@ def trade_plan_text(record: dict[str, Any]) -> str:
 def candidate_message(record: dict[str, Any]) -> str:
     sym = html.escape(str(record["symbol"]))
     stamp = html.escape(str(record.get("data_as_of", "unknown")))
+    settled = record.get("candle_state") == "settled_close"
+    if settled:
+        candle_line = ("Candle status: <b>settled</b> — this session's final NSE daily bar "
+                       "(entry reference is that close; entry would be the next session).")
+    else:
+        age = record.get("quote_age_seconds")
+        delay = (f"; provider quote was ~{int(age / 60)} min behind the exchange"
+                 if isinstance(age, (int, float)) and age > 300 else "")
+        candle_line = (f"Candle status: <b>still forming</b> — data as of {stamp} IST{delay}.")
     return (
         f"🟠 <b>ENTRY C — EARLY CANDIDATE · UNCONFIRMED</b>\n"
         f"<b>{sym}</b> · NSE daily candidate {html.escape(record['candidate_session'])}\n"
         f"26W breakout: {html.escape(record['breakout_session'])} · "
-        f"data as of {stamp} IST\n\n"
+        f"data as of {stamp} IST\n"
+        f"{candle_line}\n\n"
         f"{trade_plan_text(record)}\n\n"
         f"<b>Extra risk:</b> this candidate may never become the first precision OB. "
         f"A qualifying displacement must select this candle as its origin within "
@@ -425,6 +448,22 @@ def _is_market_time(now: datetime) -> bool:
     return now.weekday() < 5 and NSE_OPEN <= now.timetz().replace(tzinfo=None) < NSE_CLOSE
 
 
+def _is_post_close_time(now: datetime, post_close_until: time | None) -> bool:
+    """Weekday window after the NSE close in which today's candle is settled."""
+    if post_close_until is None:
+        return False
+    current = now.timetz().replace(tzinfo=None)
+    return now.weekday() < 5 and NSE_CLOSE <= current < post_close_until
+
+
+def post_close_until_from_env() -> time | None:
+    """Parse C_POST_CLOSE_UNTIL (HH:MM IST); disable with 0/off/none/disabled."""
+    raw = os.getenv("C_POST_CLOSE_UNTIL", "").strip()
+    if raw.lower() in {"0", "off", "none", "no", "disabled", "false"}:
+        return None
+    return _time_from_env("C_POST_CLOSE_UNTIL", DEFAULT_POST_CLOSE_UNTIL)
+
+
 def seconds_until_next_open(now: datetime) -> int:
     """Seconds until the next weekday NSE open (holidays are not modelled)."""
     now = now.astimezone(IST) if now.tzinfo else now.replace(tzinfo=IST)
@@ -474,21 +513,50 @@ def _split_download(raw: Any, ticker: str, ticker_count: int):
     return raw if ticker_count == 1 else None
 
 
-def _download(tickers: list[str], period: str, interval: str) -> dict[str, Any]:
-    """Batch Yahoo/yfinance download; callers tolerate missing/rate-limited rows."""
-    if not tickers:
-        return {}
-    import yfinance as yf
+def _yf_batch(yf: Any, tickers: list[str], period: str, interval: str) -> dict[str, Any]:
     raw = yf.download(
         tickers=tickers if len(tickers) > 1 else tickers[0],
         period=period, interval=interval,
         auto_adjust=False, actions=False, repair=False,
-        group_by="ticker", progress=False, threads=True,
+        group_by="ticker", progress=False,
+        # yfinance's sqlite timezone cache is not thread safe; concurrent
+        # workers produce OperationalError('database is locked') for whole
+        # symbols, which silently removed them from a one-shot scan.
+        threads=False,
         prepost=False, timeout=20,
     )
     return {ticker: frame for ticker in tickers
             if (frame := _split_download(raw, ticker, len(tickers))) is not None
             and not frame.empty}
+
+
+def _download(tickers: list[str], period: str, interval: str) -> dict[str, Any]:
+    """Batch Yahoo/yfinance download; callers tolerate missing/rate-limited rows.
+
+    A transient failure used to drop a symbol for the whole one-shot Actions
+    scan, so symbols missing from the batch are retried once as a group and
+    then individually (bounded by INDIVIDUAL_RETRY_LIMIT).
+    """
+    if not tickers:
+        return {}
+    import yfinance as yf
+    frames = _yf_batch(yf, tickers, period, interval)
+    missing = [ticker for ticker in tickers if ticker not in frames]
+    if missing:
+        log.warning("yfinance returned no %s data for %s; retrying", interval,
+                    ",".join(missing))
+        try:
+            frames.update(_yf_batch(yf, missing, period, interval))
+        except Exception as exc:
+            log.warning("batch retry for %s failed: %s", ",".join(missing), exc)
+        missing = [ticker for ticker in tickers if ticker not in frames]
+        if 0 < len(missing) <= INDIVIDUAL_RETRY_LIMIT:
+            for ticker in missing:
+                try:
+                    frames.update(_yf_batch(yf, [ticker], period, interval))
+                except Exception as exc:
+                    log.warning("%s: individual retry failed: %s", ticker, exc)
+    return frames
 
 
 def _cached_daily_frames(tickers: list[str], session_day: date) -> dict[str, Any]:
@@ -580,11 +648,44 @@ def intraday_snapshot(frame: Any, today: date, now: datetime) -> IntradaySnapsho
     return IntradaySnapshot(live_bar, last[0])
 
 
+def quote_age_limit(max_age_seconds: int | None = None) -> int:
+    """Effective MAX_QUOTE_AGE_SECONDS (seconds) used for reporting/tests."""
+    if max_age_seconds:
+        return int(max_age_seconds)
+    raw = os.getenv("MAX_QUOTE_AGE_SECONDS", "").strip()
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_MAX_QUOTE_AGE_SECONDS
+    return value if value > 0 else DEFAULT_MAX_QUOTE_AGE_SECONDS
+
+
+def quote_status(snapshot: IntradaySnapshot, now: datetime,
+                 max_age_seconds: int | None = None) -> tuple[str, float]:
+    """Classify a quote: (status, age_seconds).
+
+    * ``fresh``         - inside the configured age limit.
+    * ``delayed``       - older than the limit but still today's session and
+                          inside HARD_QUOTE_STALE_SECONDS. Usable for a
+                          *provisional* C alert; the delay is disclosed.
+    * ``too-old``       - today's session but so old it cannot be trusted.
+    * ``other-session`` - not from today at all (a frozen or stale feed).
+    """
+    age = (now - snapshot.as_of).total_seconds()
+    if snapshot.as_of.date() != now.date():
+        return "other-session", age
+    if age > HARD_QUOTE_STALE_SECONDS:
+        return "too-old", age
+    if age > quote_age_limit(max_age_seconds) or age < -60:
+        return "delayed", age
+    return "fresh", age
+
+
 def _is_fresh(snapshot: IntradaySnapshot, now: datetime,
               max_age_seconds: int | None = None) -> bool:
-    max_age_seconds = max_age_seconds or int(os.getenv("MAX_QUOTE_AGE_SECONDS", "300"))
-    age = (now - snapshot.as_of).total_seconds()
-    return -60 <= age <= max_age_seconds
+    """Whether a quote is inside the configured age limit (reporting helper)."""
+    status, _ = quote_status(snapshot, now, max_age_seconds)
+    return status == "fresh"
 
 
 def check_yfinance(symbols: list[str], now: datetime | None = None) -> int:
@@ -618,29 +719,37 @@ def check_yfinance(symbols: list[str], now: datetime | None = None) -> int:
     return 0 if daily_ok else 1
 
 
-def _send_new_candidate(symbol: str, bars: list[Bar], live: IntradaySnapshot,
+def _send_new_candidate(symbol: str, bars: list[Bar], candle: Bar,
+                        data_as_of: datetime, settled: bool,
                         breakout: BreakoutCycle, state: dict[str, Any],
                         params: OBParams, notifier: Telegram, *,
                         now: datetime | None = None,
-                        state_path: Path | None = None) -> bool:
-    candidate_day = str(live.bar.time)[:10]
+                        state_path: Path | None = None) -> str:
+    """Store and alert one new C candidate.
+
+    Returns ``sent``/``suppressed`` when a candidate record was stored (durable
+    state changed), else ``tracked``/``not_qualifying``.
+    """
+    candidate_day = str(candle.time)[:10]
     key = candidate_id(symbol, breakout.session, candidate_day)
     if key in state["candidates"]:
         log.info("%s: candidate already tracked for this session", symbol)
-        return False
-    if not is_potential_origin(live.bar, breakout, params):
-        log.info("%s: candle is not a qualifying bearish/neutral origin above 26W level", symbol)
-        return False
+        return "tracked"
+    if not is_potential_origin(candle, breakout, params):
+        log.info("%s: candle is not a qualifying bearish/neutral origin above the 26W level "
+                 "(O=%.2f H=%.2f L=%.2f C=%.2f, level=%.2f)",
+                 symbol, candle.open, candle.high, candle.low, candle.close, breakout.level)
+        return "not_qualifying"
 
     target = target_for_candidate(bars, breakout.session, candidate_day,
-                                  live.bar.high)
+                                  candle.high)
     now = now or datetime.now(IST)
     if now.tzinfo is None:
         now = now.replace(tzinfo=IST)
     else:
         now = now.astimezone(IST)
-    risk_pct = ((live.bar.close - breakout.level) / live.bar.close * 100.0
-                if live.bar.close > breakout.level else None)
+    risk_pct = ((candle.close - breakout.level) / candle.close * 100.0
+                if candle.close > breakout.level else None)
     record = {
         "id": key, "kind": "entry_c_candidate", "symbol": symbol.upper(),
         "breakout_session": breakout.session,
@@ -648,19 +757,23 @@ def _send_new_candidate(symbol: str, bars: list[Bar], live: IntradaySnapshot,
         "week_index": breakout.week_index,
         "level": breakout.level,
         "candidate_session": candidate_day,
-        "entry_estimate": float(live.bar.close),
-        "entry_estimate_source": "yfinance intraday last price",
+        "entry_estimate": float(candle.close),
+        "entry_estimate_source": ("NSE session close (settled daily bar)" if settled
+                                  else "yfinance intraday last price"),
+        "candle_state": "settled_close" if settled else "forming",
         "target_estimate": target,
         "stop": breakout.level,
         "risk_distance_pct": risk_pct,
         "time_stop_sessions": TIME_STOP_SESSIONS,
         "account_capital_inr": _finite_float(os.getenv("ACCOUNT_CAPITAL_INR", "0")),
         "risk_per_trade_pct": _finite_float(os.getenv("RISK_PER_TRADE_PCT", "1.0"), 1.0),
-        "data_as_of": live.as_of.isoformat(timespec="seconds"),
+        "data_as_of": data_as_of.isoformat(timespec="seconds"),
         "status": "pending",
         "max_origin_bars": params.origin_search,
         "created_at": now.isoformat(timespec="seconds"),
     }
+    if not settled:
+        record["quote_age_seconds"] = round((now - data_as_of).total_seconds())
     # Store the plan before sending so a successful delivery is durably tied to
     # the candidate. The per-symbol/type/day ledger prevents poll duplicates.
     state["candidates"][key] = record
@@ -675,17 +788,28 @@ def _send_new_candidate(symbol: str, bars: list[Bar], live: IntradaySnapshot,
         record["status"] = "suppressed_duplicate_same_day"
         record["notification"] = "another C candidate alert was already sent for this symbol today"
         log.info("C candidate stored but same-day duplicate alert suppressed: %s", key)
-        return True
-    log.info("C candidate sent: %s entry≈%.2f level=%.2f", symbol,
-             live.bar.close, breakout.level)
-    return True
+        return "suppressed"
+    log.info("C candidate sent: %s entry≈%.2f level=%.2f candle=%s", symbol,
+             candle.close, breakout.level, "settled" if settled else "forming")
+    return "sent"
 
 
 def scan_pass(symbols: list[str], state: dict[str, Any], notifier: Telegram,
               now: datetime | None = None, candidate_start: time | None = None,
               params: OBParams | None = None,
-              state_path: Path | None = None) -> bool:
-    """One market-data pass. Returns whether durable C state changed."""
+              state_path: Path | None = None,
+              post_close_until: time | None = DEFAULT_POST_CLOSE_UNTIL) -> bool:
+    """One market-data pass. Returns whether durable C state changed.
+
+    Two modes:
+    * live session (09:15-15:30 IST): the forming candle is aggregated from the
+      latest available intraday bars; the candidate window opens at
+      ``candidate_start`` (C_SIGNAL_START, default 15:15 IST).
+    * post-close (15:30 IST until ``post_close_until``, default 17:00 IST): the
+      session's *settled* daily bar is evaluated, so a missed late-session slot
+      or a delayed provider cannot silently lose the session. Pass
+      ``post_close_until=None`` to disable.
+    """
     now = now or datetime.now(IST)
     if now.tzinfo is None:
         now = now.replace(tzinfo=IST)
@@ -696,67 +820,127 @@ def scan_pass(symbols: list[str], state: dict[str, Any], notifier: Telegram,
     yahoo_by_symbol = {s.upper(): yahoo_ticker(s) for s in symbols}
     tickers = list(dict.fromkeys(yahoo_by_symbol.values()))
     market_live = _is_market_time(now)
-    if not market_live:
-        log.info("NSE market is closed; sleeping without market-data requests")
+    post_close = (not market_live) and _is_post_close_time(now, post_close_until)
+    if not market_live and not post_close:
+        log.info("NSE market is closed and outside the post-close window; "
+                 "no market-data requests")
         return False
+    in_candidate_window = (market_live
+                           and now.timetz().replace(tzinfo=None) >= candidate_start)
 
     try:
         daily_frames = _cached_daily_frames(tickers, now.date())
-        intraday_frames = (_download(tickers, "1d", "1m")
-                           if now.timetz().replace(tzinfo=None) >= candidate_start else {})
+        # Intraday bars are only needed for the live window: after the close the
+        # settled daily bar is authoritative.
+        intraday_frames = _download(tickers, "1d", "1m") if in_candidate_window else {}
     except Exception:
         log.exception("yfinance download failed")
         raise
 
-    log.info("Scan started: %d symbols at %s; candidates from %s IST",
-             len(yahoo_by_symbol), now.isoformat(timespec="seconds"), candidate_start)
+    log.info("Scan started: %d symbols at %s; %s; candidates from %s IST",
+             len(yahoo_by_symbol), now.isoformat(timespec="seconds"),
+             "settled post-close check" if post_close else "live session",
+             candidate_start)
     changed = False
     daily_available = 0
-    fresh_available = 0
+    usable_quotes = 0
+    quote_issues: list[str] = []
+    skips: Counter = Counter()
     for symbol, ticker in yahoo_by_symbol.items():
-        daily_frame = daily_frames.get(ticker)
-        all_daily = daily_bars_from_frame(daily_frame)
+        all_daily = daily_bars_from_frame(daily_frames.get(ticker))
         if not all_daily:
             log.warning("%s: daily data unavailable; cannot evaluate C", symbol)
+            skips["daily_data_unavailable"] += 1
             continue
         daily_available += 1
         today = now.date()
         # A daily row for today can be partial; exclude it while the market is
         # open and use the intraday aggregate instead.
         closed_bars = [b for b in all_daily if str(b.time)[:10] < today.isoformat()]
+        settled_today = next((b for b in all_daily
+                              if str(b.time)[:10] == today.isoformat()), None)
 
-        changed |= update_pending(symbol, closed_bars, state, params, notifier,
-                                  now=now, state_path=state_path)
+        # After the close, today's bar is final, so pending candidates can be
+        # confirmed/superseded/expired/invalidated on the same evening instead
+        # of waiting for the next session.
+        changed |= update_pending(symbol,
+                                  closed_bars + ([settled_today] if settled_today else []),
+                                  state, params, notifier, now=now,
+                                  state_path=state_path)
 
-        if now.timetz().replace(tzinfo=None) < candidate_start:
-            log.info("%s: before C candidate window (%s IST); pending updates checked",
-                     symbol, candidate_start)
-            continue
-        snapshot = intraday_snapshot(intraday_frames.get(ticker), today, now)
-        if snapshot is None or not _is_fresh(snapshot, now):
-            log.info("%s: no fresh yfinance intraday bar; C candidate skipped", symbol)
-            continue
-        fresh_available += 1
-        combined = closed_bars + [snapshot.bar]
+        if post_close:
+            if settled_today is None:
+                log.info("%s: today's settled daily bar is not published yet; "
+                         "will retry on the next poll", symbol)
+                skips["settled_bar_pending"] += 1
+                continue
+            log.info("%s: settled candle %s (O=%.2f H=%.2f L=%.2f C=%.2f V=%.0f)",
+                     symbol, settled_today.session, settled_today.open,
+                     settled_today.high, settled_today.low, settled_today.close,
+                     settled_today.volume)
+            candle, data_as_of, settled = settled_today, now, True
+        else:
+            if not in_candidate_window:
+                log.info("%s: before C candidate window (%s IST); pending updates checked",
+                         symbol, candidate_start)
+                continue
+            snapshot = intraday_snapshot(intraday_frames.get(ticker), today, now)
+            if snapshot is None:
+                log.warning("%s: no yfinance intraday bars for today's session; "
+                            "C candidate skipped", symbol)
+                quote_issues.append(f"{symbol}: no same-session bar")
+                skips["no_intraday_bars"] += 1
+                continue
+            status, age = quote_status(snapshot, now)
+            bar_time = snapshot.as_of.isoformat(timespec="seconds")
+            if status in {"too-old", "other-session"}:
+                log.warning("%s: intraday quote unusable (%s; newest bar %s, %.0fs old, "
+                            "hard limit %ds); C candidate skipped",
+                            symbol, status, bar_time, age, HARD_QUOTE_STALE_SECONDS)
+                quote_issues.append(f"{symbol}: {age:.0f}s/{status}")
+                skips[f"quote_{status}"] += 1
+                continue
+            if status == "delayed":
+                log.warning("%s: quote delayed by the provider (newest bar %s, %.0fs old; "
+                            "limit %ds). Yahoo's NSE feed normally lags ~15 min, so the "
+                            "delayed bar is used and the alert states its timestamp.",
+                            symbol, bar_time, age, quote_age_limit())
+                skips["quote_delayed"] += 1
+            else:
+                log.info("%s: quote fresh (newest bar %s, %.0fs old)",
+                         symbol, bar_time, age)
+            usable_quotes += 1
+            candle, data_as_of, settled = snapshot.bar, snapshot.as_of, False
+
+        combined = closed_bars + [candle]
         breakout = derive_active_26w_breakout(combined)
         if breakout is None:
             log.info("%s: no active 26-week breakout; candidate skipped", symbol)
+            skips["no_breakout"] += 1
             continue
 
         # If a previous closed bar already birthed the cycle's first OB, the
         # C candidate window for that cycle is over. C can only anticipate it.
         if first_ob_after_breakout(closed_bars, breakout, params) is not None:
             log.info("%s: first OB already confirmed; early C window ended", symbol)
+            skips["ob_already_born"] += 1
             continue
-        changed |= _send_new_candidate(symbol, combined, snapshot, breakout,
-                                       state, params, notifier, now=now,
-                                       state_path=state_path)
+        outcome = _send_new_candidate(symbol, combined, candle, data_as_of, settled,
+                                      breakout, state, params, notifier, now=now,
+                                      state_path=state_path)
+        skips[f"candidate_{outcome}"] += 1
+        changed |= outcome in {"sent", "suppressed"}
     if not daily_available:
         raise RuntimeError("No daily data available for any configured symbol")
-    if now.timetz().replace(tzinfo=None) >= candidate_start and not fresh_available:
-        raise RuntimeError("No fresh intraday quotes available during the C candidate window")
-    log.info("Scan complete: %d symbols; daily_available=%d fresh_quotes=%d state_changed=%s",
-             len(yahoo_by_symbol), daily_available, fresh_available, changed)
+    if in_candidate_window and usable_quotes == 0 and quote_issues:
+        raise RuntimeError(
+            "No fresh intraday quotes available during the C candidate window ("
+            + "; ".join(quote_issues)
+            + f"; hard limit {HARD_QUOTE_STALE_SECONDS}s)")
+    log.info("Scan complete: %d symbols; daily_available=%d usable_quotes=%d "
+             "state_changed=%s; %s", len(yahoo_by_symbol), daily_available,
+             usable_quotes, changed,
+             ", ".join(f"{name}={count}" for name, count in sorted(skips.items())))
     return changed
 
 
@@ -819,13 +1003,21 @@ def main(argv: list[str] | None = None) -> int:
     if not dry_run:
         # Persist even an empty first-run ledger so Actions can restore it.
         save_state(state_path, state)
-    log.info("Scanner configured: symbols=%s dry_run=%s state=%s",
-             ",".join(symbols), dry_run, state_path)
     poll_seconds = max(15, int(args.poll_seconds))
-    candidate_start = _time_from_env("C_SIGNAL_START", DEFAULT_C_START)
+    try:
+        candidate_start = _time_from_env("C_SIGNAL_START", DEFAULT_C_START)
+        post_close_until = post_close_until_from_env()
+    except ValueError as exc:
+        log.error("%s", exc)
+        return 2
+    log.info("Scanner configured: symbols=%s dry_run=%s state=%s candidate_start=%s IST "
+             "post_close_until=%s quote_age_limit=%ds",
+             ",".join(symbols), dry_run, state_path, candidate_start,
+             post_close_until or "disabled", quote_age_limit())
     while True:
         current = datetime.now(IST)
-        if not args.once and not _is_market_time(current):
+        if not args.once and not (_is_market_time(current)
+                                  or _is_post_close_time(current, post_close_until)):
             wait = seconds_until_next_open(current)
             next_open = (current + timedelta(seconds=wait)).strftime("%Y-%m-%d %H:%M")
             log.info("NSE closed; next weekday scan at %s IST", next_open)
@@ -834,6 +1026,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             changed = scan_pass(symbols, state, notifier, now=current,
                                candidate_start=candidate_start,
+                               post_close_until=post_close_until,
                                state_path=None if dry_run else state_path)
             if changed and not dry_run:
                 save_state(state_path, state)

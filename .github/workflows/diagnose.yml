@@ -1,0 +1,95 @@
+name: diagnose-entry-c
+
+# Read-only diagnosis: never sends Telegram alerts and never touches the live
+# ledger. It reports what the scanner can see right now, why each symbol is or
+# is not alertable, and replays the C window against today's data.
+on:
+  workflow_dispatch:
+    inputs:
+      as_of:
+        description: 'HH:MM IST to replay the C candidate window at (default: the configured C_SIGNAL_START)'
+        required: false
+        type: string
+      quote_lag:
+        description: 'Emulate a provider that lags N seconds behind the clock (default 900)'
+        required: false
+        type: string
+        default: '900'
+      post_close_at:
+        description: 'HH:MM IST for the settled-candle replay (default 16:00; blank to skip)'
+        required: false
+        type: string
+        default: '16:00'
+      send_test_message:
+        description: 'Send ONE Telegram connectivity test (not a trade signal)'
+        required: false
+        type: boolean
+        default: false
+  push:
+    branches: [arena/95a246a2-precision-test]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: entry-c-diagnosis
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      C_SIGNAL_START: ${{ vars.C_SIGNAL_START || '15:15' }}
+      C_POST_CLOSE_UNTIL: ${{ vars.C_POST_CLOSE_UNTIL || '17:00' }}
+      MAX_QUOTE_AGE_SECONDS: ${{ vars.MAX_QUOTE_AGE_SECONDS || '1200' }}
+      ACCOUNT_CAPITAL_INR: ${{ vars.ACCOUNT_CAPITAL_INR }}
+      RISK_PER_TRADE_PCT: ${{ vars.RISK_PER_TRADE_PCT || '1.0' }}
+      # Presence (never the values) is reported by the probe.
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Probe the feed and replay the scan decisions
+        run: |
+          set +e
+          python tools/diag_probe.py \
+            --as-of "${{ inputs.as_of || env.C_SIGNAL_START }}" \
+            --quote-lag "${{ inputs.quote_lag || '900' }}" \
+            --post-close-at "${{ inputs.post_close_at || '16:00' }}" \
+            2>&1 | tee diag_probe.txt
+          echo "probe_exit=${PIPESTATUS[0]}"
+
+      - name: Optional Telegram connectivity test
+        if: ${{ inputs.send_test_message }}
+        env:
+          DRY_RUN: '0'
+        run: python entry_c.py --symbols RELIANCE --test-telegram
+
+      - name: Diagnosis report
+        if: always()
+        run: |
+          {
+            echo '## Entry C diagnosis'
+            echo
+            echo '```'
+            cat diag_probe.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Key facts as annotations: visible on the run page and readable from
+          # the annotations API without downloading the raw log. GitHub stores a
+          # limited number of annotations per step, so the probe emits at most
+          # ten consolidated REPORT lines.
+          if grep -qE '^REPORT\|' diag_probe.txt; then
+            grep -E '^REPORT\|' diag_probe.txt | sed 's/^/::notice title=entry-c diag::/'
+          else
+            echo "::warning title=entry-c diag::probe produced no REPORT lines"
+            tail -15 diag_probe.txt | sed 's/^/::warning title=entry-c diag::/'
+          fi
