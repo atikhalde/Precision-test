@@ -1,0 +1,395 @@
+### gh run view 38370997011
+scan	UNKNOWN STEP	﻿2026-10-13T08:41:36.3310037Z Current runner version: '2.337.0'
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3330701Z ##[group]Runner Image Provisioner
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3331409Z Hosted Compute Agent
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3331792Z Version: 20261002.596
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3332245Z Commit: c3d12f3313a95f25162a1503be624f3b0617f8c0
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3332717Z Build Date: 2026-10-02T22:28:27Z
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3333243Z Worker ID: {2f18137d-3dd0-4276-a9f2-287e70b81ff7}
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3333713Z Region: centralus
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3334093Z Cloud: Azure
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3334499Z ##[endgroup]
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3335403Z ##[group]Operating System
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3335902Z Ubuntu
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3336271Z 24.04.5
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3336617Z LTS
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3337004Z ##[endgroup]
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3337430Z ##[group]Runner Image
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3338108Z Image: ubuntu-24.04
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3338503Z Version: 20261004.327.1
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3339694Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261004.327/images/ubuntu/Ubuntu2404-Readme.md
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3340654Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261004.327
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3341310Z ##[endgroup]
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3342079Z ##[group]GITHUB_TOKEN Permissions
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3343609Z Actions: read
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3344031Z Contents: read
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3344440Z Metadata: read
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3344824Z ##[endgroup]
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3346303Z Secret source: Actions
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3347006Z Cache mode: write
+scan	UNKNOWN STEP	2026-10-13T08:41:36.3347641Z Prepare workflow directory
+scan	UNKNOWN STEP	2026-10-13T08:41:36.5104764Z Prepare all required actions
+scan	UNKNOWN STEP	2026-10-13T08:41:36.5155702Z Getting action download info
+scan	UNKNOWN STEP	2026-10-13T08:41:36.7525851Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+scan	UNKNOWN STEP	2026-10-13T08:41:36.8337415Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+scan	UNKNOWN STEP	2026-10-13T08:41:36.9401297Z Download action repository 'actions/github-script@v7' (SHA:f28e40c7f34bde8b3046d885e986cb6290c5673b)
+scan	UNKNOWN STEP	2026-10-13T08:41:37.2740168Z Download action repository 'actions/download-artifact@v4' (SHA:d3f86a106a0bac45b974a628896c90dbdf5c8093)
+scan	UNKNOWN STEP	2026-10-13T08:41:37.8451484Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0486628Z Complete job name: scan
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0965396Z ##[group]Run actions/checkout@v4
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0965861Z with:
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0966135Z   repository: atikhalde/Precision-test
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0968637Z   token: ***
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0968889Z   ssh-strict: true
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0969181Z   ssh-user: git
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0969435Z   persist-credentials: true
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0969714Z   clean: true
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0969974Z   sparse-checkout-cone-mode: true
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0970275Z   fetch-depth: 1
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0970522Z   fetch-tags: false
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0970777Z   show-progress: true
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0971046Z   lfs: false
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0971323Z   submodules: false
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0971579Z   set-safe-directory: true
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0971874Z   allow-unsafe-pr-checkout: false
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0972287Z env:
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0972629Z   TELEGRAM_BOT_TOKEN: ***
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0972920Z   TELEGRAM_CHAT_ID: ***
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0973181Z   DRY_RUN: 0
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0973461Z   C_SIGNAL_START: 15:15
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0973731Z   MAX_QUOTE_AGE_SECONDS: 300
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0974010Z   ACCOUNT_CAPITAL_INR: 
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0974278Z   RISK_PER_TRADE_PCT: 1.0
+scan	UNKNOWN STEP	2026-10-13T08:41:38.0974548Z ##[endgroup]
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1682739Z Syncing repository: atikhalde/Precision-test
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1684154Z ##[group]Getting Git version info
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1684636Z Working directory is '/home/runner/work/Precision-test/Precision-test'
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1685386Z [command]/usr/bin/git version
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1769472Z git version 2.55.0
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1800374Z ##[endgroup]
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1808628Z Temporarily overriding HOME='/home/runner/work/_temp/0f67ee1d-7bbf-498a-bcf1-569dfe40844e' before making global git config changes
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1810060Z Adding repository directory to the temporary git global config as a safe directory
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1811327Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Precision-test/Precision-test
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1830001Z Deleting the contents of '/home/runner/work/Precision-test/Precision-test'
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1834144Z ##[group]Initializing the repository
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1838429Z [command]/usr/bin/git init /home/runner/work/Precision-test/Precision-test
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1951870Z hint: Using 'master' as the name for the initial branch. This default branch name
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1952932Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1953821Z hint: to use in all of your new repositories, which will suppress this warning,
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1954515Z hint: call:
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1954971Z hint:
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1955462Z hint: 	git config --global init.defaultBranch <name>
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1956072Z hint:
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1956609Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1957469Z hint: 'development'. The just-created branch can be renamed via this command:
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1958300Z hint:
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1963734Z hint: 	git branch -m <name>
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1964314Z hint:
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1964970Z hint: Disable this message with "git config set advice.defaultBranchName false"
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1966063Z Initialized empty Git repository in /home/runner/work/Precision-test/Precision-test/.git/
+scan	UNKNOWN STEP	2026-10-13T08:41:38.1973212Z [command]/usr/bin/git remote add origin https://github.com/atikhalde/Precision-test
+scan	UNKNOWN STEP	2026-10-13T08:41:38.2024528Z ##[endgroup]
+scan	UNKNOWN STEP	2026-10-13T08:41:38.2098491Z ##[group]Disabling automatic garbage collection
+scan	UNKNOWN STEP	2026-10-13T08:41:38.2100489Z [command]/usr/bin/git config --local gc.auto 0
+scan	UNKNOWN STEP	2026-10-13T08:41:38.2102844Z ##[endgroup]
+scan	UNKNOWN STEP	2026-10-13T08:41:38.2103596Z ##[group]Setting up auth
+scan	UNKNOWN STEP	2026-10-13T08:41:38.2104451Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+scan	UNKNOWN STEP	2026-10-13T08:41:38.2117310Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+scan	UNKNOWN STEP	2026-10-13T08:41:38.2541874Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+scan	UNKNOWN STEP	2026-10-13T08:41:38.2573449Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+scan	UNKNOWN STEP	2026-10-13T08:41:38.2761685Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+scan	UNKNOWN STEP	2026-10-13T08:41:38.2793319Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+scan	UNKNOWN STEP	2026-10-13T08:41:38.2977411Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+scan	UNKNOWN STEP	2026-10-13T08:41:38.3015551Z ##[endgroup]
+scan	UNKNOWN STEP	2026-10-13T08:41:38.3016190Z ##[group]Fetching the repository
+scan	UNKNOWN STEP	2026-10-13T08:41:38.3023242Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +ac5f21c5d346723eb7bd8ae2edab1e372b161b43:refs/remotes/origin/main
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6323656Z From https://github.com/atikhalde/Precision-test
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6324311Z  * [new ref]         ac5f21c5d346723eb7bd8ae2edab1e372b161b43 -> origin/main
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6326955Z ##[endgroup]
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6327384Z ##[group]Determining the checkout info
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6329066Z ##[endgroup]
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6333436Z [command]/usr/bin/git sparse-checkout disable
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6386579Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6419333Z ##[group]Checking out the ref
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6423316Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6674286Z Switched to a new branch 'main'
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6677275Z branch 'main' set up to track 'origin/main'.
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6683561Z ##[endgroup]
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6724863Z [command]/usr/bin/git log -1 --format=%H
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6749142Z ac5f21c5d346723eb7bd8ae2edab1e372b161b43
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6958534Z ##[group]Run actions/setup-python@v5
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6958900Z with:
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6959146Z   python-version: 3.11
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6959426Z   cache: pip
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6959704Z   check-latest: false
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6962164Z   token: ***
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6962431Z   update-environment: true
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6962747Z   allow-prereleases: false
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6963019Z   freethreaded: false
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6963270Z env:
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6963588Z   TELEGRAM_BOT_TOKEN: ***
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6963903Z   TELEGRAM_CHAT_ID: ***
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6964170Z   DRY_RUN: 0
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6964423Z   C_SIGNAL_START: 15:15
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6964713Z   MAX_QUOTE_AGE_SECONDS: 300
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6965042Z   ACCOUNT_CAPITAL_INR: 
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6965340Z   RISK_PER_TRADE_PCT: 1.0
+scan	UNKNOWN STEP	2026-10-13T08:41:38.6965622Z ##[endgroup]
+scan	UNKNOWN STEP	2026-10-13T08:41:38.7897095Z ##[group]Installed versions
+scan	UNKNOWN STEP	2026-10-13T08:41:38.7966707Z (node:2091) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+scan	UNKNOWN STEP	2026-10-13T08:41:38.7967660Z (Use `node --trace-deprecation ...` to show where the warning was created)
+scan	UNKNOWN STEP	2026-10-13T08:41:38.7968519Z Successfully set up CPython (3.11.17)
+scan	UNKNOWN STEP	2026-10-13T08:41:38.7969282Z ##[endgroup]
+scan	UNKNOWN STEP	2026-10-13T08:41:38.8364123Z [command]/opt/hostedtoolcache/Python/3.11.17/x64/bin/pip cache dir
+scan	UNKNOWN STEP	2026-10-13T08:41:39.0961600Z /home/runner/.cache/pip
+scan	UNKNOWN STEP	2026-10-13T08:41:39.2798083Z Cache hit for: setup-python-Linux-x64-24.04-Ubuntu-python-3.11.17-pip-d7a9ae7774b430f34a5c409df8b4923cd974702315a65e2fecf9e06544b4d8ff
+scan	UNKNOWN STEP	2026-10-13T08:41:39.2873085Z (node:2091) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+scan	UNKNOWN STEP	2026-10-13T08:41:40.2240819Z Received 52040735 of 52040735 (100.0%), 63.1 MBs/sec
+scan	UNKNOWN STEP	2026-10-13T08:41:40.2241365Z Cache Size: ~50 MB (52040735 B)
+scan	UNKNOWN STEP	2026-10-13T08:41:40.2357246Z [command]/usr/bin/tar -xf /home/runner/work/_temp/d65d3b77-04d8-409b-9e17-a8581447f343/cache.tzst -P -C /home/runner/work/Precision-test/Precision-test --use-compress-program unzstd
+scan	UNKNOWN STEP	2026-10-13T08:41:40.2976702Z Cache restored successfully
+scan	UNKNOWN STEP	2026-10-13T08:41:40.3009260Z Cache restored from key: setup-python-Linux-x64-24.04-Ubuntu-python-3.11.17-pip-d7a9ae7774b430f34a5c409df8b4923cd974702315a65e2fecf9e06544b4d8ff
+scan	UNKNOWN STEP	2026-10-13T08:41:40.3168540Z ##[group]Run python -m pip install -r requirements.txt
+scan	UNKNOWN STEP	2026-10-13T08:41:40.3168865Z ^[[36;1mpython -m pip install -r requirements.txt^[[0m
+scan	UNKNOWN STEP	2026-10-13T08:41:40.3417183Z shell: /usr/bin/bash -e {0}
+scan	UNKNOWN STEP	2026-10-13T08:41:40.3417451Z env:
+scan	UNKNOWN STEP	2026-10-13T08:41:40.3418372Z   TELEGRAM_BOT_TOKEN: ***
+scan	UNKNOWN STEP	2026-10-13T08:41:40.3418544Z   TELEGRAM_CHAT_ID: ***
+scan	UNKNOWN STEP	2026-10-13T08:41:40.3418686Z   DRY_RUN: 0
+scan	UNKNOWN STEP	2026-10-13T08:41:40.3418808Z   C_SIGNAL_START: 15:15
+scan	UNKNOWN STEP	2026-10-13T08:41:40.3418946Z   MAX_QUOTE_AGE_SECONDS: 300
+scan	UNKNOWN STEP	2026-10-13T08:41:40.3419117Z   ACCOUNT_CAPITAL_INR: 
+scan	UNKNOWN STEP	2026-10-13T08:41:40.3419291Z   RISK_PER_TRADE_PCT: 1.0
+scan	UNKNOWN STEP	2026-10-13T08:41:40.3419476Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.17/x64
+scan	UNKNOWN STEP	2026-10-13T08:41:40.3419749Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib/pkgconfig
+scan	UNKNOWN STEP	2026-10-13T08:41:40.3420013Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+scan	UNKNOWN STEP	2026-10-13T08:41:40.3420242Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+scan	UNKNOWN STEP	2026-10-13T08:41:40.3420526Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+scan	UNKNOWN STEP	2026-10-13T08:41:40.3420756Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib
+scan	UNKNOWN STEP	2026-10-13T08:41:40.3421241Z ##[endgroup]
+scan	UNKNOWN STEP	2026-10-13T08:41:41.3149219Z Collecting pandas<4.0,>=2.0 (from -r requirements.txt (line 2))
+scan	UNKNOWN STEP	2026-10-13T08:41:41.3165323Z   Using cached pandas-3.0.6-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl.metadata (79 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:41.4393015Z Collecting numpy<3.0,>=1.24 (from -r requirements.txt (line 3))
+scan	UNKNOWN STEP	2026-10-13T08:41:41.4408461Z   Using cached numpy-2.4.6-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (6.6 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:41.4673669Z Collecting requests<3.0,>=2.31 (from -r requirements.txt (line 4))
+scan	UNKNOWN STEP	2026-10-13T08:41:41.4686347Z   Using cached requests-2.34.2-py3-none-any.whl.metadata (4.8 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:41.4845130Z Collecting python-dotenv<2.0,>=1.0 (from -r requirements.txt (line 5))
+scan	UNKNOWN STEP	2026-10-13T08:41:41.4856852Z   Using cached python_dotenv-1.2.4-py3-none-any.whl.metadata (29 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:41.5065240Z Collecting yfinance<2.0,>=0.2.0 (from -r requirements.txt (line 6))
+scan	UNKNOWN STEP	2026-10-13T08:41:41.5076423Z   Using cached yfinance-1.7.0-py3-none-any.whl.metadata (6.7 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:41.5250792Z Collecting python-dateutil>=2.8.2 (from pandas<4.0,>=2.0->-r requirements.txt (line 2))
+scan	UNKNOWN STEP	2026-10-13T08:41:41.5262911Z   Using cached python_dateutil-2.9.0.post0-py2.py3-none-any.whl.metadata (8.4 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:41.6080067Z Collecting charset_normalizer<4,>=2 (from requests<3.0,>=2.31->-r requirements.txt (line 4))
+scan	UNKNOWN STEP	2026-10-13T08:41:41.6095454Z   Using cached charset_normalizer-3.5.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (46 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:41.6643694Z Collecting idna<4,>=2.5 (from requests<3.0,>=2.31->-r requirements.txt (line 4))
+scan	UNKNOWN STEP	2026-10-13T08:41:41.6655845Z   Using cached idna-3.20-py3-none-any.whl.metadata (7.2 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:41.7297019Z Collecting urllib3<3,>=1.26 (from requests<3.0,>=2.31->-r requirements.txt (line 4))
+scan	UNKNOWN STEP	2026-10-13T08:41:41.7312809Z   Using cached urllib3-2.8.0-py3-none-any.whl.metadata (7.4 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:41.7770353Z Collecting certifi>=2023.5.7 (from requests<3.0,>=2.31->-r requirements.txt (line 4))
+scan	UNKNOWN STEP	2026-10-13T08:41:41.7783131Z   Using cached certifi-2026.7.22-py3-none-any.whl.metadata (2.5 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:41.8586472Z Collecting beautifulsoup4>=4.11.1 (from yfinance<2.0,>=0.2.0->-r requirements.txt (line 6))
+scan	UNKNOWN STEP	2026-10-13T08:41:41.8600651Z   Using cached beautifulsoup4-4.15.0-py3-none-any.whl.metadata (3.8 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:41.9352213Z Collecting curl_cffi>=0.15 (from yfinance<2.0,>=0.2.0->-r requirements.txt (line 6))
+scan	UNKNOWN STEP	2026-10-13T08:41:41.9365637Z   Using cached curl_cffi-0.16.3-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (17 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:42.1065829Z Collecting lxml>=4.9.0 (from yfinance<2.0,>=0.2.0->-r requirements.txt (line 6))
+scan	UNKNOWN STEP	2026-10-13T08:41:42.1079031Z   Using cached lxml-6.1.3-cp311-cp311-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl.metadata (3.3 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:42.1229743Z Collecting multitasking>=0.0.7 (from yfinance<2.0,>=0.2.0->-r requirements.txt (line 6))
+scan	UNKNOWN STEP	2026-10-13T08:41:42.1239285Z   Using cached multitasking-0.0.13-py3-none-any.whl.metadata (16 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:42.1773940Z Collecting peewee>=3.16.2 (from yfinance<2.0,>=0.2.0->-r requirements.txt (line 6))
+scan	UNKNOWN STEP	2026-10-13T08:41:42.1785698Z   Using cached peewee-4.5.3-py3-none-any.whl.metadata (10 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:42.2068681Z Collecting platformdirs>=2.0.0 (from yfinance<2.0,>=0.2.0->-r requirements.txt (line 6))
+scan	UNKNOWN STEP	2026-10-13T08:41:42.2080273Z   Using cached platformdirs-4.13.0-py3-none-any.whl.metadata (5.5 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:42.4926926Z Collecting protobuf>=3.19.0 (from yfinance<2.0,>=0.2.0->-r requirements.txt (line 6))
+scan	UNKNOWN STEP	2026-10-13T08:41:42.4938705Z   Using cached protobuf-7.36.2-cp310-abi3-manylinux2014_x86_64.whl.metadata (595 bytes)
+scan	UNKNOWN STEP	2026-10-13T08:41:42.5655591Z Collecting pytz>=2022.5 (from yfinance<2.0,>=0.2.0->-r requirements.txt (line 6))
+scan	UNKNOWN STEP	2026-10-13T08:41:42.5666688Z   Using cached pytz-2026.5-py2.py3-none-any.whl.metadata (22 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:42.8257635Z Collecting websockets>=13.0 (from yfinance<2.0,>=0.2.0->-r requirements.txt (line 6))
+scan	UNKNOWN STEP	2026-10-13T08:41:42.8269477Z   Using cached websockets-17.2-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (6.3 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:42.8670318Z Collecting soupsieve>=1.6.1 (from beautifulsoup4>=4.11.1->yfinance<2.0,>=0.2.0->-r requirements.txt (line 6))
+scan	UNKNOWN STEP	2026-10-13T08:41:42.8681101Z   Using cached soupsieve-3.0.3-py3-none-any.whl.metadata (4.4 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:42.9869641Z Collecting typing-extensions>=4.0.0 (from beautifulsoup4>=4.11.1->yfinance<2.0,>=0.2.0->-r requirements.txt (line 6))
+scan	UNKNOWN STEP	2026-10-13T08:41:42.9880784Z   Using cached typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.1924329Z Collecting cffi>=2.0.0 (from curl_cffi>=0.15->yfinance<2.0,>=0.2.0->-r requirements.txt (line 6))
+scan	UNKNOWN STEP	2026-10-13T08:41:43.1936560Z   Using cached cffi-2.1.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.5 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.2944732Z Collecting pycparser (from cffi>=2.0.0->curl_cffi>=0.15->yfinance<2.0,>=0.2.0->-r requirements.txt (line 6))
+scan	UNKNOWN STEP	2026-10-13T08:41:43.2958469Z   Using cached pycparser-3.11-py3-none-any.whl.metadata (8.2 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4446443Z Collecting six>=1.5 (from python-dateutil>=2.8.2->pandas<4.0,>=2.0->-r requirements.txt (line 2))
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4460099Z   Using cached six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4490801Z Using cached pandas-3.0.6-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (11.1 MB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4531955Z Using cached numpy-2.4.6-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.9 MB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4584570Z Using cached requests-2.34.2-py3-none-any.whl (73 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4592806Z Using cached python_dotenv-1.2.4-py3-none-any.whl (23 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4601185Z Using cached yfinance-1.7.0-py3-none-any.whl (149 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4610385Z Using cached charset_normalizer-3.5.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (269 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4620745Z Using cached idna-3.20-py3-none-any.whl (69 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4630886Z Using cached urllib3-2.8.0-py3-none-any.whl (135 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4640834Z Using cached beautifulsoup4-4.15.0-py3-none-any.whl (109 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4649541Z Using cached certifi-2026.7.22-py3-none-any.whl (136 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4659255Z Using cached curl_cffi-0.16.3-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (13.5 MB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4701569Z Using cached cffi-2.1.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (217 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4714048Z Using cached lxml-6.1.3-cp311-cp311-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl (5.2 MB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4737025Z Using cached multitasking-0.0.13-py3-none-any.whl (16 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4745558Z Using cached peewee-4.5.3-py3-none-any.whl (194 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4754833Z Using cached platformdirs-4.13.0-py3-none-any.whl (32 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4763569Z Using cached protobuf-7.36.2-cp310-abi3-manylinux2014_x86_64.whl (343 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4773046Z Using cached python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4782202Z Using cached pytz-2026.5-py2.py3-none-any.whl (506 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4792296Z Using cached six-1.17.0-py2.py3-none-any.whl (11 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4800964Z Using cached soupsieve-3.0.3-py3-none-any.whl (41 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4809929Z Using cached typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4819704Z Using cached websockets-17.2-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (225 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.4831421Z Using cached pycparser-3.11-py3-none-any.whl (51 kB)
+scan	UNKNOWN STEP	2026-10-13T08:41:43.6529340Z Installing collected packages: pytz, multitasking, websockets, urllib3, typing-extensions, soupsieve, six, python-dotenv, pycparser, protobuf, platformdirs, peewee, numpy, lxml, idna, charset_normalizer, certifi, requests, python-dateutil, cffi, beautifulsoup4, pandas, curl_cffi, yfinance
+scan	UNKNOWN STEP	2026-10-13T08:41:50.5672439Z 
+scan	UNKNOWN STEP	2026-10-13T08:41:50.5684979Z Successfully installed beautifulsoup4-4.15.0 certifi-2026.7.22 cffi-2.1.1 charset_normalizer-3.5.2 curl_cffi-0.16.3 idna-3.20 lxml-6.1.3 multitasking-0.0.13 numpy-2.4.6 pandas-3.0.6 peewee-4.5.3 platformdirs-4.13.0 protobuf-7.36.2 pycparser-3.11 python-dateutil-2.9.0.post0 python-dotenv-1.2.4 pytz-2026.5 requests-2.34.2 six-1.17.0 soupsieve-3.0.3 typing-extensions-4.16.0 urllib3-2.8.0 websockets-17.2 yfinance-1.7.0
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7086282Z ##[group]Run actions/github-script@v7
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7086460Z with:
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7088286Z   script: // Artifacts are newest-first. Pagination avoids unrelated test artifacts
+scan	UNKNOWN STEP	// hiding the ledger. Never silently start over if the latest has expired.
+scan	UNKNOWN STEP	for await (const response of github.paginate.iterator(
+scan	UNKNOWN STEP	  github.rest.actions.listArtifactsForRepo,
+scan	UNKNOWN STEP	  { ...context.repo, name: 'entry-c-live-state', per_page: 100 }
+scan	UNKNOWN STEP	)) {
+scan	UNKNOWN STEP	  const artifact = response.data.find(a => a.name === 'entry-c-live-state');
+scan	UNKNOWN STEP	  if (!artifact) continue;
+scan	UNKNOWN STEP	  if (artifact.expired) throw new Error('C ledger expired. Restore the ledger before enabling live scans.');
+scan	UNKNOWN STEP	  core.setOutput('artifact_id', String(artifact.id));
+scan	UNKNOWN STEP	  core.setOutput('run_id', String(artifact.workflow_run.id));
+scan	UNKNOWN STEP	  core.info(`Restoring C ledger from run ${artifact.workflow_run.id}`);
+scan	UNKNOWN STEP	  return;
+scan	UNKNOWN STEP	}
+scan	UNKNOWN STEP	core.info('No previous C ledger: first-run initialization. Do not delete live-state artifacts.');
+scan	UNKNOWN STEP	
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7091318Z   github-token: ***
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7091463Z   debug: false
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7091597Z   user-agent: actions/github-script
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7091755Z   result-encoding: json
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7091888Z   retries: 0
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7092025Z   retry-exempt-status-codes: 400,401,403,404,422
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7092195Z env:
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7092379Z   TELEGRAM_BOT_TOKEN: ***
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7092549Z   TELEGRAM_CHAT_ID: ***
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7092676Z   DRY_RUN: 0
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7092794Z   C_SIGNAL_START: 15:15
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7092926Z   MAX_QUOTE_AGE_SECONDS: 300
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7093071Z   ACCOUNT_CAPITAL_INR: 
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7093204Z   RISK_PER_TRADE_PCT: 1.0
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7093380Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.17/x64
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7093629Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib/pkgconfig
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7093872Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7094099Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7094322Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7094549Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib
+scan	UNKNOWN STEP	2026-10-13T08:41:50.7094736Z ##[endgroup]
+scan	UNKNOWN STEP	2026-10-13T08:41:51.0072935Z No previous C ledger: first-run initialization. Do not delete live-state artifacts.
+scan	UNKNOWN STEP	2026-10-13T08:41:51.0321961Z ##[group]Run python entry_c.py --symbols-file symbols.txt --state-file state_c.json --once
+scan	UNKNOWN STEP	2026-10-13T08:41:51.0322338Z ^[[36;1mpython entry_c.py --symbols-file symbols.txt --state-file state_c.json --once^[[0m
+scan	UNKNOWN STEP	2026-10-13T08:41:51.0374956Z shell: /usr/bin/bash -e {0}
+scan	UNKNOWN STEP	2026-10-13T08:41:51.0375100Z env:
+scan	UNKNOWN STEP	2026-10-13T08:41:51.0375399Z   TELEGRAM_BOT_TOKEN: ***
+scan	UNKNOWN STEP	2026-10-13T08:41:51.0375547Z   TELEGRAM_CHAT_ID: ***
+scan	UNKNOWN STEP	2026-10-13T08:41:51.0375678Z   DRY_RUN: 0
+scan	UNKNOWN STEP	2026-10-13T08:41:51.0375796Z   C_SIGNAL_START: 15:15
+scan	UNKNOWN STEP	2026-10-13T08:41:51.0375931Z   MAX_QUOTE_AGE_SECONDS: 300
+scan	UNKNOWN STEP	2026-10-13T08:41:51.0376070Z   ACCOUNT_CAPITAL_INR: 
+scan	UNKNOWN STEP	2026-10-13T08:41:51.0376202Z   RISK_PER_TRADE_PCT: 1.0
+scan	UNKNOWN STEP	2026-10-13T08:41:51.0376377Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.17/x64
+scan	UNKNOWN STEP	2026-10-13T08:41:51.0376621Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib/pkgconfig
+scan	UNKNOWN STEP	2026-10-13T08:41:51.0376857Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+scan	UNKNOWN STEP	2026-10-13T08:41:51.0377105Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+scan	UNKNOWN STEP	2026-10-13T08:41:51.0377322Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+scan	UNKNOWN STEP	2026-10-13T08:41:51.0377541Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib
+scan	UNKNOWN STEP	2026-10-13T08:41:51.0378058Z ##[endgroup]
+scan	UNKNOWN STEP	2026-10-13T08:41:51.1438643Z 2026-10-13 08:41:51 INFO Scanner configured: symbols=RELIANCE,TCS,INFY dry_run=False state=state_c.json
+scan	UNKNOWN STEP	2026-10-13T08:41:52.2479631Z 2026-10-13 08:41:52 ERROR 
+scan	UNKNOWN STEP	2026-10-13T08:41:52.2479975Z 1 Failed download:
+scan	UNKNOWN STEP	2026-10-13T08:41:52.2480639Z 2026-10-13 08:41:52 ERROR ['RELIANCE.NS']: OperationalError('database is locked')
+scan	UNKNOWN STEP	2026-10-13T08:41:52.2502143Z 2026-10-13 08:41:52 INFO Scan started: 3 symbols at 2026-10-13T14:11:51+05:30; candidates from 15:15:00 IST
+scan	UNKNOWN STEP	2026-10-13T08:41:52.2588290Z 2026-10-13 08:41:52 WARNING RELIANCE: daily data unavailable; cannot evaluate C
+scan	UNKNOWN STEP	2026-10-13T08:41:52.2677178Z 2026-10-13 08:41:52 INFO TCS: before C candidate window (15:15:00 IST); pending updates checked
+scan	UNKNOWN STEP	2026-10-13T08:41:52.2764640Z 2026-10-13 08:41:52 INFO INFY: before C candidate window (15:15:00 IST); pending updates checked
+scan	UNKNOWN STEP	2026-10-13T08:41:52.2765189Z 2026-10-13 08:41:52 INFO Scan complete: 3 symbols; daily_available=2 fresh_quotes=0 state_changed=False
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4200447Z ##[group]Run actions/upload-artifact@v4
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4200620Z with:
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4200746Z   name: entry-c-live-state
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4200882Z   path: state_c.json
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4201010Z   retention-days: 90
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4201137Z   if-no-files-found: error
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4201275Z   compression-level: 6
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4201403Z   overwrite: false
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4201530Z   include-hidden-files: false
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4201667Z env:
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4201946Z   TELEGRAM_BOT_TOKEN: ***
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4202092Z   TELEGRAM_CHAT_ID: ***
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4202220Z   DRY_RUN: 0
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4202333Z   C_SIGNAL_START: 15:15
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4202464Z   MAX_QUOTE_AGE_SECONDS: 300
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4202610Z   ACCOUNT_CAPITAL_INR: 
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4202739Z   RISK_PER_TRADE_PCT: 1.0
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4202915Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.17/x64
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4203195Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib/pkgconfig
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4203440Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4203665Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4203882Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4204101Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib
+scan	UNKNOWN STEP	2026-10-13T08:41:52.4204290Z ##[endgroup]
+scan	UNKNOWN STEP	2026-10-13T08:41:52.5366441Z (node:2194) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+scan	UNKNOWN STEP	2026-10-13T08:41:52.5367032Z (Use `node --trace-deprecation ...` to show where the warning was created)
+scan	UNKNOWN STEP	2026-10-13T08:41:52.5399687Z With the provided path, there will be 1 file uploaded
+scan	UNKNOWN STEP	2026-10-13T08:41:52.5403404Z Artifact name is valid!
+scan	UNKNOWN STEP	2026-10-13T08:41:52.5404547Z Root directory input is valid!
+scan	UNKNOWN STEP	2026-10-13T08:41:52.7997143Z Beginning upload of artifact content to blob storage
+scan	UNKNOWN STEP	2026-10-13T08:41:52.8110287Z (node:2194) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+scan	UNKNOWN STEP	2026-10-13T08:41:52.9558683Z Uploaded bytes 187
+scan	UNKNOWN STEP	2026-10-13T08:41:52.9935158Z Finished uploading artifact content to blob storage!
+scan	UNKNOWN STEP	2026-10-13T08:41:52.9935732Z SHA256 digest of uploaded artifact zip is a256a78e9e90cdddf5a027eba0e26bdf7b7ba52b1fda584f5949fb09c6c67d36
+scan	UNKNOWN STEP	2026-10-13T08:41:52.9936143Z Finalizing artifact upload
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2085844Z Artifact entry-c-live-state.zip successfully finalized. Artifact ID 11799260747
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2086649Z Artifact entry-c-live-state has been successfully uploaded! Final size is 187 bytes. Artifact ID is 11799260747
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2091618Z Artifact download URL: https://github.com/atikhalde/Precision-test/actions/runs/38370997011/artifacts/11799260747
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2197503Z ##[group]Run {
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2198065Z ^[[36;1m{^[[0m
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2198214Z ^[[36;1m  echo '## Entry C scanner'^[[0m
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2198446Z ^[[36;1m  echo "- Scan step: ${SCAN_OUTCOME:-not started}"^[[0m
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2198674Z ^[[36;1m  echo "- Dry run: $DRY_RUN"^[[0m
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2198935Z ^[[36;1m  echo "- Candidate window starts: $C_SIGNAL_START IST; market closes 15:30 IST."^[[0m
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2199364Z ^[[36;1m  echo '- A successful scan does not imply a qualifying candidate. See per-symbol reasons in the scan log.'^[[0m
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2199851Z ^[[36;1m  echo '- GitHub Actions timing is best-effort. Maintain a VPS scanner for reliable late-session coverage.'^[[0m
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2200183Z ^[[36;1m} >> "$GITHUB_STEP_SUMMARY"^[[0m
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2254736Z shell: /usr/bin/bash -e {0}
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2254897Z env:
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2255165Z   TELEGRAM_BOT_TOKEN: ***
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2255330Z   TELEGRAM_CHAT_ID: ***
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2255504Z   DRY_RUN: 0
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2255628Z   C_SIGNAL_START: 15:15
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2255788Z   MAX_QUOTE_AGE_SECONDS: 300
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2255942Z   ACCOUNT_CAPITAL_INR: 
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2256088Z   RISK_PER_TRADE_PCT: 1.0
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2256276Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.17/x64
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2256559Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib/pkgconfig
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2256833Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2257080Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2257334Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2257581Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2257965Z   SCAN_OUTCOME: success
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2258109Z ##[endgroup]
+scan	UNKNOWN STEP	2026-10-13T08:41:53.2394824Z Post job cleanup.
+scan	UNKNOWN STEP	2026-10-13T08:41:53.3249647Z Cache hit occurred on the primary key setup-python-Linux-x64-24.04-Ubuntu-python-3.11.17-pip-d7a9ae7774b430f34a5c409df8b4923cd974702315a65e2fecf9e06544b4d8ff, not saving cache.
+scan	UNKNOWN STEP	2026-10-13T08:41:53.3250646Z (node:2208) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+scan	UNKNOWN STEP	2026-10-13T08:41:53.3251205Z (Use `node --trace-deprecation ...` to show where the warning was created)
+scan	UNKNOWN STEP	2026-10-13T08:41:53.3355556Z Post job cleanup.
+scan	UNKNOWN STEP	2026-10-13T08:41:53.3978378Z [command]/usr/bin/git version
+scan	UNKNOWN STEP	2026-10-13T08:41:53.4003069Z git version 2.55.0
+scan	UNKNOWN STEP	2026-10-13T08:41:53.4028926Z Temporarily overriding HOME='/home/runner/work/_temp/fdf9e1ff-8ad1-4400-9bb0-61a31b174e6d' before making global git config changes
+scan	UNKNOWN STEP	2026-10-13T08:41:53.4029776Z Adding repository directory to the temporary git global config as a safe directory
+scan	UNKNOWN STEP	2026-10-13T08:41:53.4032579Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Precision-test/Precision-test
+scan	UNKNOWN STEP	2026-10-13T08:41:53.4069936Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+scan	UNKNOWN STEP	2026-10-13T08:41:53.4102723Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+scan	UNKNOWN STEP	2026-10-13T08:41:53.4338391Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+scan	UNKNOWN STEP	2026-10-13T08:41:53.4369462Z http.https://github.com/.extraheader
+scan	UNKNOWN STEP	2026-10-13T08:41:53.4378897Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+scan	UNKNOWN STEP	2026-10-13T08:41:53.4417240Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+scan	UNKNOWN STEP	2026-10-13T08:41:53.4629753Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+scan	UNKNOWN STEP	2026-10-13T08:41:53.4661786Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+scan	UNKNOWN STEP	2026-10-13T08:41:53.4977030Z Cleaning up orphan processes
+scan	UNKNOWN STEP	2026-10-13T08:41:53.5187436Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/github-script@v7, actions/setup-python@v5, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
