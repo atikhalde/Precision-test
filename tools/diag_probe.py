@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
 """Diagnostic probe for the Entry C scanner.
 
-Read-only: never sends Telegram alerts, never touches the live ledger. It only
-reports what the scanner can see and why a symbol is or is not alertable.
+Read-only: never sends Telegram alerts, never touches the live ledger. It
+reports what the scanner can see right now, why each symbol is or is not
+alertable, and replays the C window against today's data.
+
+Lines starting with ``REPORT|`` are the machine-readable headlines; the
+diagnose-entry-c workflow turns them into run annotations.
 
 Usage:
     python tools/diag_probe.py [--as-of HH:MM] [--quote-lag SECONDS]
+                               [--post-close-at HH:MM]
 """
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import os
 import sys
@@ -23,38 +27,51 @@ sys.path.insert(0, str(ROOT))
 
 import entry_c as ec  # noqa: E402
 
+REPORT = "REPORT|"
 
-def _hhmm(value: str) -> tuple[int, int]:
-    hh, mm = value.split(":", 1)
-    return int(hh), int(mm)
+
+def report(text: str) -> None:
+    print(f"{REPORT} {text}", flush=True)
 
 
 def section(title: str) -> None:
     print(f"\n{'=' * 72}\n== {title}\n{'=' * 72}", flush=True)
 
 
+def _hhmm(value: str) -> tuple[int, int]:
+    hh, mm = value.split(":", 1)
+    return int(hh), int(mm)
+
+
 def env_report(now: datetime) -> None:
     section("ENV / CONFIG AS THE WORKFLOW RESOLVES IT")
-    print(f"now (UTC)            : {now.astimezone(timezone.utc).isoformat(timespec='seconds')}")
-    print(f"now (IST)            : {now.isoformat(timespec='seconds')}")
-    print(f"weekday              : {now.strftime('%A')} ({now.weekday()})")
-    print(f"market open now      : {ec._is_market_time(now)}  (NSE 09:15-15:30 IST, Mon-Fri)")
-    print(f"DRY_RUN              : {os.getenv('DRY_RUN', '<unset>')!r}"
-          f"  -> scanner dry run: {ec.os.getenv('DRY_RUN', '0').strip().lower() in {'1', 'true', 'yes'}}")
-    print(f"C_SIGNAL_START       : {os.getenv('C_SIGNAL_START', '<unset>')!r}")
-    print(f"MAX_QUOTE_AGE_SECONDS: {os.getenv('MAX_QUOTE_AGE_SECONDS', '<unset>')!r}")
-    print(f"ACCOUNT_CAPITAL_INR  : {os.getenv('ACCOUNT_CAPITAL_INR', '<unset>')!r}")
-    print(f"RISK_PER_TRADE_PCT   : {os.getenv('RISK_PER_TRADE_PCT', '<unset>')!r}")
     token = os.getenv("TELEGRAM_BOT_TOKEN", "")
     chat = os.getenv("TELEGRAM_CHAT_ID", "")
-    # Never print the values; presence and length only.
-    print(f"TELEGRAM_BOT_TOKEN   : {'SET' if token else 'MISSING'} (len={len(token)})")
-    print(f"TELEGRAM_CHAT_ID     : {'SET' if chat else 'MISSING'} (len={len(chat)})")
+    dry_run = os.getenv("DRY_RUN", "0").strip().lower() in {"1", "true", "yes"}
+    print(f"now (UTC)            : {now.astimezone(timezone.utc).isoformat(timespec='seconds')}")
+    print(f"now (IST)            : {now.isoformat(timespec='seconds')}")
+    print(f"market open now      : {ec._is_market_time(now)}  (NSE 09:15-15:30 IST, Mon-Fri)")
+    print(f"post-close window    : {ec._is_post_close_time(now, ec.post_close_until_from_env())}")
+    print(f"C_SIGNAL_START       : {os.getenv('C_SIGNAL_START', '<unset>')!r}")
+    print(f"C_POST_CLOSE_UNTIL   : {os.getenv('C_POST_CLOSE_UNTIL', '<unset>')!r}"
+          f" -> {ec.post_close_until_from_env() or 'disabled'}")
+    print(f"MAX_QUOTE_AGE_SECONDS: {os.getenv('MAX_QUOTE_AGE_SECONDS', '<unset>')!r}"
+          f" -> {ec.quote_age_limit()}s (hard limit {ec.HARD_QUOTE_STALE_SECONDS}s)")
+    print(f"ACCOUNT_CAPITAL_INR  : {os.getenv('ACCOUNT_CAPITAL_INR', '<unset>')!r}")
     try:
         import yfinance
         print(f"yfinance             : {yfinance.__version__}")
     except Exception as exc:  # pragma: no cover
         print(f"yfinance             : IMPORT FAILED {exc}")
+    # Never print the values; presence and length only.
+    print(f"TELEGRAM_BOT_TOKEN   : {'SET' if token else 'MISSING'} (len={len(token)})")
+    print(f"TELEGRAM_CHAT_ID     : {'SET' if chat else 'MISSING'} (len={len(chat)})")
+    report(f"config: C_SIGNAL_START={os.getenv('C_SIGNAL_START', '15:15')} "
+           f"post_close_until={ec.post_close_until_from_env() or 'disabled'} "
+           f"quote_age_limit={ec.quote_age_limit()}s")
+    report(f"credentials: token={'SET' if token else 'MISSING'} "
+           f"chat={'SET' if chat else 'MISSING'} "
+           f"(a missing credential makes live scans exit 2)")
 
 
 def feed_probe(symbols: list[str], now: datetime) -> None:
@@ -70,27 +87,29 @@ def feed_probe(symbols: list[str], now: datetime) -> None:
             payload = response.json()["chart"]["result"][0]
             meta = payload["meta"]
             stamps = payload.get("timestamp") or []
-            quotes = payload["indicators"]["quote"][0]
-            closes = quotes.get("close") or []
-            last_i = None
-            for i in range(len(stamps) - 1, -1, -1):
-                if i < len(closes) and closes[i] is not None:
-                    last_i = i
-                    break
+            closes = (payload["indicators"]["quote"][0].get("close") or [])
+            last_i = next((i for i in range(len(stamps) - 1, -1, -1)
+                           if i < len(closes) and closes[i] is not None), None)
             rmt = meta.get("regularMarketTime")
             print(f"\n{symbol} ({ticker})")
-            print(f"  exchange             : {meta.get('fullExchangeName')} tz={meta.get('exchangeTimezoneName')}")
+            print(f"  exchange             : {meta.get('fullExchangeName')} "
+                  f"tz={meta.get('exchangeTimezoneName')}")
             print(f"  regularMarketPrice   : {meta.get('regularMarketPrice')}")
-            print(f"  regularMarketTime    : {datetime.fromtimestamp(rmt, ec.IST).isoformat(timespec='seconds') if rmt else None}"
-                  f"  (age {(now - datetime.fromtimestamp(rmt, ec.IST)).total_seconds():.0f}s)" if rmt else "")
+            if rmt:
+                rmt_dt = datetime.fromtimestamp(rmt, ec.IST)
+                print(f"  regularMarketTime    : {rmt_dt.isoformat(timespec='seconds')} "
+                      f"(age {(now - rmt_dt).total_seconds():.0f}s)")
             if last_i is not None:
                 last_bar = datetime.fromtimestamp(stamps[last_i], ec.IST)
-                print(f"  last 1m bar w/ data  : {last_bar.isoformat(timespec='seconds')}"
-                      f"  (age {(now - last_bar).total_seconds():.0f}s)")
-            print(f"  bars returned        : {len(stamps)} (last timestamp "
-                  f"{datetime.fromtimestamp(stamps[-1], ec.IST).isoformat(timespec='seconds') if stamps else '-'})")
+                status, age = "session", (now - last_bar).total_seconds()
+                print(f"  last 1m bar w/ data  : {last_bar.isoformat(timespec='seconds')} "
+                      f"(age {age:.0f}s)")
+                report(f"{symbol}: last 1m bar with data {last_bar.strftime('%H:%M')} IST, "
+                       f"age {age / 60:.1f} min (provider delay)")
+            print(f"  bars returned        : {len(stamps)}")
         except Exception as exc:
             print(f"\n{symbol} ({ticker}): probe failed: {exc!r}")
+            report(f"{symbol}: chart-api probe failed: {exc!r}")
 
 
 def _fmt_bar(bar: ec.Bar | None) -> str:
@@ -107,7 +126,6 @@ def strategy_report(symbols: list[str], now: datetime) -> dict[str, object]:
     tickers = [ec.yahoo_ticker(s) for s in symbols]
     daily = ec._download(tickers, ec.DEFAULT_LOOKBACK, "1d")
     intraday = ec._download(tickers, "1d", "1m")
-    max_age = int(os.getenv("MAX_QUOTE_AGE_SECONDS", "300"))
     out: dict[str, object] = {}
     for symbol in symbols:
         ticker = ec.yahoo_ticker(symbol)
@@ -128,18 +146,20 @@ def strategy_report(symbols: list[str], now: datetime) -> dict[str, object]:
             if snap is None:
                 print("  intraday snapshot : NONE (no usable 1m bars for this session)")
             else:
-                age = (now - snap.as_of).total_seconds()
+                status, age = ec.quote_status(snap, now)
                 print(f"  intraday snapshot : {_fmt_bar(snap.bar)}")
                 print(f"  newest 1m bar     : {snap.as_of.isoformat(timespec='seconds')} "
-                      f"(age {age:.0f}s; gate {max_age}s -> fresh={ec._is_fresh(snap, now, max_age)})")
+                      f"(age {age:.0f}s -> {status})")
 
             combined = closed + ([snap.bar] if snap else ([today_bar] if today_bar else []))
             breakout = ec.derive_active_26w_breakout(combined)
             if breakout is None:
                 print("  active 26W breakout: NONE -> C candidate impossible for this symbol")
+                report(f"{symbol}: no active 26-week breakout "
+                       f"(last close {combined[-1].close:.2f} if any) -> no C candidate possible")
             else:
-                print(f"  active 26W breakout: session={breakout.session} level={breakout.level:.2f} "
-                      f"week_close={breakout.close:.2f} week_index={breakout.week_index}")
+                print(f"  active 26W breakout: session={breakout.session} "
+                      f"level={breakout.level:.2f} week_close={breakout.close:.2f}")
                 candle = snap.bar if snap else today_bar
                 if candle is None:
                     print("  candidate candle  : NONE")
@@ -150,11 +170,14 @@ def strategy_report(symbols: list[str], now: datetime) -> dict[str, object]:
                                and abs(candle.close - candle.open) / rng <= params.neutral_body)
                     above = candle.close > breakout.level
                     zone = candle.open > candle.low
+                    qualifies = ec.is_potential_origin(candle, breakout, params)
                     print(f"  candidate candle  : {_fmt_bar(candle)}")
-                    print(f"    bearish={bearish} neutral={neutral} (neutral_body<={params.neutral_body})")
-                    print(f"    close>level       : {above} ({candle.close:.2f} vs {breakout.level:.2f})")
-                    print(f"    open>low (zone)   : {zone} ({candle.open:.2f} vs {candle.low:.2f})")
-                    print(f"    -> is_potential_origin = {ec.is_potential_origin(candle, breakout, params)}")
+                    print(f"    bearish={bearish} neutral={neutral} "
+                          f"close>level={above} open>low={zone}")
+                    print(f"    -> is_potential_origin = {qualifies}")
+                    report(f"{symbol}: active 26W breakout {breakout.session} "
+                           f"level={breakout.level:.2f}; candle {_fmt_bar(candle)}; "
+                           f"candidate={qualifies}")
                 first_ob = ec.first_ob_after_breakout(closed, breakout, params)
                 print(f"  first OB already born: "
                       f"{first_ob.zone.born_session if first_ob else 'no'}")
@@ -166,14 +189,21 @@ def strategy_report(symbols: list[str], now: datetime) -> dict[str, object]:
             }
         except Exception:
             print(f"  ERROR for {symbol}:\n{traceback.format_exc()}")
+            report(f"{symbol}: probe error: {sys.exc_info()[1]!r}")
     return out
 
 
-def replay_scan(symbols: list[str], now: datetime, quote_lag: int, label: str) -> None:
+def replay_scan(symbols: list[str], now: datetime, quote_lag: int, label: str,
+                age_limit: int | None = None) -> None:
     """Run the *real* scan_pass at `now`, optionally emulating provider delay."""
     section(f"REPLAY scan_pass @ {now.isoformat(timespec='seconds')} IST "
-            f"(emulated quote delay {quote_lag}s) — {label}")
+            f"(emulated quote lag {quote_lag}s, age limit "
+            f"{age_limit if age_limit else ec.quote_age_limit()}s) — {label}")
     real_download = ec._download
+    patched_env = False
+    if age_limit:
+        os.environ["MAX_QUOTE_AGE_SECONDS"] = str(age_limit)
+        patched_env = True
 
     if quote_lag:
         def lagged(tickers: list[str], period: str, interval: str):
@@ -197,21 +227,29 @@ def replay_scan(symbols: list[str], now: datetime, quote_lag: int, label: str) -
         state = {"schema": 1, "candidates": {}, "alerts_sent": {}}
         notifier = ec.Telegram("", "", dry_run=True)
         changed = ec.scan_pass(symbols, state, notifier, now=now,
-                              candidate_start=ec._time_from_env("C_SIGNAL_START", ec.DEFAULT_C_START))
+                              candidate_start=ec._time_from_env("C_SIGNAL_START",
+                                                                ec.DEFAULT_C_START))
         print(f"\nscan_pass completed. state_changed={changed}")
         print(f"candidates that would be tracked: {list(state['candidates'])}")
-    except Exception:
-        print("\n>>> scan_pass RAISED — this is the failure the live run hit:")
+        report(f"replay {label}: scan_pass completed, state_changed={changed}, "
+               f"candidates={list(state['candidates']) or 'none'}")
+    except Exception as exc:
+        print("\n>>> scan_pass RAISED:")
         traceback.print_exc()
+        report(f"replay {label}: scan_pass RAISED {exc!r}")
     finally:
         ec._download = real_download  # type: ignore[assignment]
+        if patched_env:
+            os.environ.pop("MAX_QUOTE_AGE_SECONDS", None)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--as-of", help="HH:MM IST to replay the scan at (default: now)")
+    ap.add_argument("--as-of", help="HH:MM IST to replay the C window at (default: now)")
     ap.add_argument("--quote-lag", type=int, default=0,
-                    help="emulate a provider that lags N seconds behind wall clock")
+                    help="emulate a provider that lags N seconds behind the clock")
+    ap.add_argument("--post-close-at", default="",
+                    help="HH:MM IST for the settled-candle replay (blank to skip)")
     ap.add_argument("--symbols-file", default=str(ROOT / "symbols.txt"))
     args = ap.parse_args()
 
@@ -221,7 +259,12 @@ def main() -> int:
     now = datetime.now(ec.IST)
     env_report(now)
     print(f"symbols              : {symbols}")
+    report(f"symbols: {','.join(symbols)} ({len(symbols)} configured; alerts require an "
+           f"active 26-week breakout, so a small watchlist rarely qualifies)")
+
     feed_probe(symbols, now)
+    strategy_report(symbols, now)
+
     if args.as_of:
         hh, mm = _hhmm(args.as_of)
         replay_now = now.replace(hour=hh, minute=mm, second=30, microsecond=0)
@@ -229,11 +272,18 @@ def main() -> int:
               f"to {replay_now.isoformat(timespec='seconds')} IST")
     else:
         replay_now = now
-    strategy_report(symbols, now)
-    replay_scan(symbols, replay_now, 0, "ideal feed, no delay")
+    replay_scan(symbols, replay_now, 0, "ideal feed, no provider delay")
     if args.quote_lag:
         replay_scan(symbols, replay_now, args.quote_lag,
-                    f"provider lags {args.quote_lag}s, i.e. what the live run actually saw")
+                    f"provider lags {args.quote_lag}s as the live 15:2x run saw it",
+                    age_limit=300)
+        replay_scan(symbols, replay_now, args.quote_lag,
+                    f"provider lags {args.quote_lag}s with the deployed limit",
+                    age_limit=ec.quote_age_limit())
+    if args.post_close_at:
+        hh, mm = _hhmm(args.post_close_at)
+        replay_scan(symbols, now.replace(hour=hh, minute=mm, second=0, microsecond=0),
+                    0, f"settled-candle pass at {args.post_close_at} IST")
     return 0
 
 

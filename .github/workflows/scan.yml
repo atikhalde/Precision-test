@@ -32,12 +32,19 @@ jobs:
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '0' }}
       C_SIGNAL_START: ${{ vars.C_SIGNAL_START || '15:15' }}
-      MAX_QUOTE_AGE_SECONDS: ${{ vars.MAX_QUOTE_AGE_SECONDS || '300' }}
+      # Settled-candle re-check after the 15:30 IST close. Set the repository
+      # variable to '0'/'off' to disable it.
+      C_POST_CLOSE_UNTIL: ${{ vars.C_POST_CLOSE_UNTIL || '17:00' }}
+      # Yahoo's NSE intraday feed normally lags ~15 minutes. A 5-minute limit
+      # rejected every quote inside the candidate window, so keep this above the
+      # observed provider delay; stale-but-current-session bars are used and the
+      # delay is stated in the alert.
+      MAX_QUOTE_AGE_SECONDS: ${{ vars.MAX_QUOTE_AGE_SECONDS || '1200' }}
       ACCOUNT_CAPITAL_INR: ${{ vars.ACCOUNT_CAPITAL_INR }}
       RISK_PER_TRADE_PCT: ${{ vars.RISK_PER_TRADE_PCT || '1.0' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: pip
@@ -77,7 +84,12 @@ jobs:
 
       - name: Scan NSE symbols and send qualifying C alerts
         id: scan
-        run: python entry_c.py --symbols-file symbols.txt --state-file state_c.json --once
+        run: |
+          # Keep the scanner's own diagnostics: the exit code still decides the
+          # step result, and the log is summarised in the next step.
+          python entry_c.py --symbols-file symbols.txt --state-file state_c.json --once 2>&1 | tee entry_c_scan.log
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          exit "${PIPESTATUS[0]}"
 
       - name: Preserve live C ledger, including partial successful deliveries
         if: ${{ always() && (steps.scan.outcome == 'success' || steps.scan.outcome == 'failure') && env.DRY_RUN == '0' && hashFiles('state_c.json') != '' }}
@@ -92,12 +104,23 @@ jobs:
         if: always()
         env:
           SCAN_OUTCOME: ${{ steps.scan.outcome }}
+          SCAN_EXIT: ${{ steps.scan.outputs.exit_code }}
         run: |
           {
             echo '## Entry C scanner'
-            echo "- Scan step: ${SCAN_OUTCOME:-not started}"
+            echo "- Scan step: ${SCAN_OUTCOME:-not started} (exit ${SCAN_EXIT:-n/a})"
             echo "- Dry run: $DRY_RUN"
-            echo "- Candidate window starts: $C_SIGNAL_START IST; market closes 15:30 IST."
-            echo '- A successful scan does not imply a qualifying candidate. See per-symbol reasons in the scan log.'
-            echo '- GitHub Actions timing is best-effort. Maintain a VPS scanner for reliable late-session coverage.'
+            echo "- Candidate window: $C_SIGNAL_START–15:30 IST; settled-candle re-check until $C_POST_CLOSE_UNTIL IST."
+            echo "- Quote age limit: ${MAX_QUOTE_AGE_SECONDS}s. A delayed Yahoo quote is logged and used with its timestamp in the alert; it is not a failure."
+            echo "- A successful scan does not imply a qualifying candidate."
+            echo
+            echo '### Per-symbol reasons'
+            echo '```'
+            grep -E 'INFO|WARNING|ERROR|Traceback|RuntimeError' entry_c_scan.log 2>/dev/null | tail -40 || echo 'no scanner output captured'
+            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          # Surface the machine-readable reasons on the run page (and to the
+          # annotations API) so a "no alert" day can be understood without
+          # downloading the raw log. Capped to keep the run page readable.
+          grep -E 'Scan complete|WARNING|Traceback|RuntimeError' entry_c_scan.log 2>/dev/null \
+            | tail -25 | sed 's/^/::notice title=entry-c scanner::/' || true
