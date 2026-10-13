@@ -122,7 +122,9 @@ Every run writes the per-symbol reasons into the run summary and as run
 annotations, so a day with no alert can be explained without downloading the
 raw log. `diagnose-entry-c` (Actions → Run workflow) is a read-only probe: it
 sends no alerts, never touches the ledger, and replays the window against the
-current data.
+current data. Set its `send_test_message` input (or `test-entry-c`'s
+`send_telegram_test` input) to send one Telegram connectivity message — that is
+the only way this workflow writes to your chat, and it is never a trade signal.
 
 **Scheduling reality:** the `*/5 3-10 * * 1-5` cron is retained, but GitHub did
 not execute a single scheduled run in this repository. Live runs are driven by

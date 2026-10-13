@@ -20,6 +20,11 @@ on:
         required: false
         type: string
         default: '16:00'
+      send_test_message:
+        description: 'Send ONE Telegram connectivity test (not a trade signal)'
+        required: false
+        type: boolean
+        default: false
   push:
     branches: [arena/95a246a2-precision-test]
 
@@ -61,6 +66,12 @@ jobs:
             --post-close-at "${{ inputs.post_close_at || '16:00' }}" \
             2>&1 | tee diag_probe.txt
           echo "probe_exit=${PIPESTATUS[0]}"
+
+      - name: Optional Telegram connectivity test
+        if: ${{ inputs.send_test_message }}
+        env:
+          DRY_RUN: '0'
+        run: python entry_c.py --symbols RELIANCE --test-telegram
 
       - name: Diagnosis report
         if: always()

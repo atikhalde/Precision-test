@@ -87,9 +87,11 @@ jobs:
         run: |
           # Keep the scanner's own diagnostics: the exit code still decides the
           # step result, and the log is summarised in the next step.
+          set +e
           python entry_c.py --symbols-file symbols.txt --state-file state_c.json --once 2>&1 | tee entry_c_scan.log
-          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
-          exit "${PIPESTATUS[0]}"
+          status=${PIPESTATUS[0]}   # capture before any other command resets it
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
 
       - name: Preserve live C ledger, including partial successful deliveries
         if: ${{ always() && (steps.scan.outcome == 'success' || steps.scan.outcome == 'failure') && env.DRY_RUN == '0' && hashFiles('state_c.json') != '' }}
@@ -124,3 +126,4 @@ jobs:
           # downloading the raw log. Capped to keep the run page readable.
           grep -E 'Scan complete|WARNING|Traceback|RuntimeError' entry_c_scan.log 2>/dev/null \
             | tail -25 | sed 's/^/::notice title=entry-c scanner::/' || true
+          exit 0
