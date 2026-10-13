@@ -46,13 +46,15 @@ python -m pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edit `.env` and set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`. The initial `symbols.txt` watchlist is RELIANCE, TCS, and INFY. Replace or extend it with your intended NSE universe—without `.NS`—one per line, for example:
+Edit `.env` and set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`. `symbols.txt` ships with the **full NSE equity universe** (series EQ from the official NSE archive, ~2,300 symbols, one per line without `.NS`). Trim it to what you actually monitor if you prefer a curated list:
 
 ```text
 RELIANCE
 TCS
 INFY
 ```
+
+Full-universe scanning is slower by design: the daily download is deliberately **serial** (concurrent downloads break yfinance's sqlite timezone cache), so a window scan takes roughly 7–9 minutes at ~160 ms/symbol. The expensive 1-minute bars are fetched **only for symbols whose daily data already shows an active 26-week breakout** without a born first OB — usually a handful — which keeps the intraday request near-instant. Yahoo may still throttle or skip some symbols; the log names each one and retries failed symbols once. Refresh the list with `python tools/build_nse_universe.py --out symbols_nse.txt`.
 
 Create the Telegram bot with BotFather, start a chat with it, and set the chat ID. **Never commit the real `.env` file or bot token.** Optionally set `ACCOUNT_CAPITAL_INR` and `RISK_PER_TRADE_PCT` locally; without capital, the plan still shows per-share risk and estimated R:R but leaves share quantity uncalculated.
 
@@ -83,6 +85,8 @@ After confirming the messages and symbols, set `DRY_RUN=0` in `.env` and run con
 ```bash
 python entry_c.py --poll-seconds 60
 ```
+
+With the default full-universe watchlist the *first* pass of each session downloads two years of daily data for ~2,300 symbols (several minutes, serial on purpose); subsequent passes reuse the per-session cache, so intraday polling stays light. A one-shot `--once` run always pays the full daily download.
 
 Or use `--symbols-file symbols.txt`. The scanner checks yfinance data freshness (default maximum age 20 minutes, above the ~15-minute NSE feed delay; adjust with `MAX_QUOTE_AGE_SECONDS`) and skips quotes that are unusable or from a previous session. It maintains its own `state_c.json`; that state is ignored by Git and is not shared with A/B.
 
