@@ -40,7 +40,7 @@ python -m pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edit `.env` and set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`. Add NSE symbols—without `.NS`—one per line in `symbols.txt`, for example:
+Edit `.env` and set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`. The initial `symbols.txt` watchlist is RELIANCE, TCS, and INFY. Replace or extend it with your intended NSE universe—without `.NS`—one per line, for example:
 
 ```text
 RELIANCE
@@ -80,12 +80,57 @@ python entry_c.py --poll-seconds 60
 
 Or use `--symbols-file symbols.txt`. The scanner checks yfinance data freshness (default maximum age 5 minutes; adjust with `MAX_QUOTE_AGE_SECONDS`) and will skip stale intraday snapshots. It maintains its own `state_c.json`; that state is ignored by Git and is not shared with A/B.
 
-For a long-running live process, use a VPS/systemd service (example: `precision-c-scanner.service.example`). GitHub Actions is included only for tests; scheduled Actions are not a dependable low-latency market scanner.
+For a long-running live process, use a VPS/systemd service (example: `precision-c-scanner.service.example`). A separate `scan-entry-c` GitHub Actions workflow now performs best-effort scheduled scans; see below. Scheduled Actions are not a dependable low-latency market scanner.
+
+## GitHub Actions alerts
+
+`test-entry-c` is still tests/compilation only. Its optional connectivity message
+is not a trading signal. **`scan-entry-c` actually runs the scanner** every five
+minutes on weekdays between 03:00 and 10:59 UTC, skipping closed NSE hours.
+Schedules activate only after `.github/workflows/scan.yml` reaches **main**.
+You can also use Actions → scan-entry-c → Run workflow on main; select dry run
+for a no-send check. Scheduled runs send real qualifying alerts (`DRY_RUN=0`).
+
+Required repository Actions secrets (Settings → Secrets and variables → Actions):
+
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
+
+These are the same names used by the existing connectivity test. Missing secrets
+or an empty symbol list fail the scan visibly. Optional repository **variables**:
+`C_SIGNAL_START` (default `15:15` IST), `MAX_QUOTE_AGE_SECONDS` (300),
+`ACCOUNT_CAPITAL_INR`, and `RISK_PER_TRADE_PCT` (1.0). Earlier C windows change
+strategy timing and increase provisional-candle risk; they are not required.
+
+Each live run restores the latest `entry-c-live-state` artifact and uploads the
+updated ledger, including any deliveries completed before a later failure.
+Runs are serialized to prevent concurrent sends from stale state. **Do not delete
+live-state artifacts**: losing them loses pending candidates and duplicate
+history. Artifacts have 90-day retention; archive/restore the ledger before a
+long pause. An expired or corrupt ledger fails closed rather than silently
+resetting history. If all artifacts have been deleted by retention or a person,
+the workflow cannot distinguish that from a first-ever run. Keep an external
+backup for long-term operation. If ledger upload fails after a delivery, stop live
+scans and recover that run's ledger before retrying: restoring an older artifact
+can resend an alert. Telegram network timeouts also cannot guarantee exactly-once
+delivery. Do not run a separate VPS sender with a different
+ledger against the same watchlist/chat unless duplicate alerts are acceptable.
+
+Logs show each symbol's skip reason (pre-window, missing/stale data, no breakout,
+already-confirmed OB, nonqualifying candle, or tracked candidate). One-shot
+exceptions and complete data outages fail the workflow instead of showing a
+misleading green result. No qualifying candidate is a normal successful scan.
+
+**Timing limitation:** Actions may queue, delay, or drop scheduled jobs, and
+queued concurrent runs may be replaced by GitHub. Even a five-minute schedule
+can miss the 15:15–15:30 IST candidate window. Use the systemd/VPS setup above for
+more reliable 60-second polling. Yahoo data can also be delayed. No alerts are
+forced and the strategy conditions remain unchanged.
 
 ## Tests
 
 ```bash
-python -m unittest discover -s tests -v
+python -m unittest discover -s test -v
 ```
 
 ## Repository boundary
