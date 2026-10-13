@@ -38,7 +38,9 @@ concurrency:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Each replay does the same serial daily download as the live scan (the
+    # session cache means it happens once, then every replay reuses it).
+    timeout-minutes: 35
     env:
       C_SIGNAL_START: ${{ vars.C_SIGNAL_START || '15:15' }}
       C_POST_CLOSE_UNTIL: ${{ vars.C_POST_CLOSE_UNTIL || '17:00' }}

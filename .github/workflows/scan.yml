@@ -26,7 +26,10 @@ jobs:
     # Only main may operate the live alert ledger. PRs are covered by tests.yml.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The full NSE universe (symbols.txt, ~2.3k tickers) needs several minutes
+    # of sequential daily downloads, then seconds of 1m data for breakout
+    # candidates only; 30 minutes has roughly 3x margin at typical speed.
+    timeout-minutes: 30
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

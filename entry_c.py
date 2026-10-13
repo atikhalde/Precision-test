@@ -794,6 +794,32 @@ def _send_new_candidate(symbol: str, bars: list[Bar], candle: Bar,
     return "sent"
 
 
+def _evaluate_candidate(symbol: str, closed_bars: list[Bar], candle: Bar,
+                        data_as_of: datetime, settled: bool,
+                        state: dict[str, Any], params: OBParams,
+                        notifier: Telegram, skipped: Counter, *,
+                        now: datetime, state_path: Path | None) -> bool:
+    """Breakout + first-OB + candidate tests on a fully known candle."""
+    combined = closed_bars + [candle]
+    breakout = derive_active_26w_breakout(combined)
+    if breakout is None:
+        log.info("%s: no active 26-week breakout; candidate skipped", symbol)
+        skipped["no_breakout"] += 1
+        return False
+
+    # If a previous closed bar already birthed the cycle's first OB, the
+    # C candidate window for that cycle is over. C can only anticipate it.
+    if first_ob_after_breakout(closed_bars, breakout, params) is not None:
+        log.info("%s: first OB already confirmed; early C window ended", symbol)
+        skipped["ob_already_born"] += 1
+        return False
+    outcome = _send_new_candidate(symbol, combined, candle, data_as_of, settled,
+                                  breakout, state, params, notifier, now=now,
+                                  state_path=state_path)
+    skipped[f"candidate_{outcome}"] += 1
+    return outcome in {"sent", "suppressed"}
+
+
 def scan_pass(symbols: list[str], state: dict[str, Any], notifier: Telegram,
               now: datetime | None = None, candidate_start: time | None = None,
               params: OBParams | None = None,
@@ -809,6 +835,13 @@ def scan_pass(symbols: list[str], state: dict[str, Any], notifier: Telegram,
       session's *settled* daily bar is evaluated, so a missed late-session slot
       or a delayed provider cannot silently lose the session. Pass
       ``post_close_until=None`` to disable.
+
+    1-minute bars are the expensive request over a whole NSE universe, so they
+    are only fetched for symbols whose *daily* bars already show a live cycle
+    (an active 26-week breakout, computing the forming candle from today's
+    partial daily row when Yahoo provides it, and no first OB born yet). A
+    cross that only happens in the last ~15 minutes is caught by the
+    settled-candle pass, which needs no intraday data at all.
     """
     now = now or datetime.now(IST)
     if now.tzinfo is None:
@@ -830,9 +863,6 @@ def scan_pass(symbols: list[str], state: dict[str, Any], notifier: Telegram,
 
     try:
         daily_frames = _cached_daily_frames(tickers, now.date())
-        # Intraday bars are only needed for the live window: after the close the
-        # settled daily bar is authoritative.
-        intraday_frames = _download(tickers, "1d", "1m") if in_candidate_window else {}
     except Exception:
         log.exception("yfinance download failed")
         raise
@@ -846,6 +876,8 @@ def scan_pass(symbols: list[str], state: dict[str, Any], notifier: Telegram,
     usable_quotes = 0
     quote_issues: list[str] = []
     skips: Counter = Counter()
+    needs_quotes: list[tuple[str, str, list[Bar]]] = []
+
     for symbol, ticker in yahoo_by_symbol.items():
         all_daily = daily_bars_from_frame(daily_frames.get(ticker))
         if not all_daily:
@@ -878,58 +910,77 @@ def scan_pass(symbols: list[str], state: dict[str, Any], notifier: Telegram,
                      symbol, settled_today.session, settled_today.open,
                      settled_today.high, settled_today.low, settled_today.close,
                      settled_today.volume)
-            candle, data_as_of, settled = settled_today, now, True
-        else:
-            if not in_candidate_window:
-                log.info("%s: before C candidate window (%s IST); pending updates checked",
-                         symbol, candidate_start)
-                continue
-            snapshot = intraday_snapshot(intraday_frames.get(ticker), today, now)
-            if snapshot is None:
-                log.warning("%s: no yfinance intraday bars for today's session; "
-                            "C candidate skipped", symbol)
-                quote_issues.append(f"{symbol}: no same-session bar")
-                skips["no_intraday_bars"] += 1
-                continue
-            status, age = quote_status(snapshot, now)
-            bar_time = snapshot.as_of.isoformat(timespec="seconds")
-            if status in {"too-old", "other-session"}:
-                log.warning("%s: intraday quote unusable (%s; newest bar %s, %.0fs old, "
-                            "hard limit %ds); C candidate skipped",
-                            symbol, status, bar_time, age, HARD_QUOTE_STALE_SECONDS)
-                quote_issues.append(f"{symbol}: {age:.0f}s/{status}")
-                skips[f"quote_{status}"] += 1
-                continue
-            if status == "delayed":
-                log.warning("%s: quote delayed by the provider (newest bar %s, %.0fs old; "
-                            "limit %ds). Yahoo's NSE feed normally lags ~15 min, so the "
-                            "delayed bar is used and the alert states its timestamp.",
-                            symbol, bar_time, age, quote_age_limit())
-                skips["quote_delayed"] += 1
-            else:
-                log.info("%s: quote fresh (newest bar %s, %.0fs old)",
-                         symbol, bar_time, age)
-            usable_quotes += 1
-            candle, data_as_of, settled = snapshot.bar, snapshot.as_of, False
-
-        combined = closed_bars + [candle]
-        breakout = derive_active_26w_breakout(combined)
-        if breakout is None:
-            log.info("%s: no active 26-week breakout; candidate skipped", symbol)
-            skips["no_breakout"] += 1
+            changed |= _evaluate_candidate(symbol, closed_bars, settled_today,
+                                           now, True, state, params, notifier, skips,
+                                           now=now, state_path=state_path)
             continue
 
-        # If a previous closed bar already birthed the cycle's first OB, the
-        # C candidate window for that cycle is over. C can only anticipate it.
-        if first_ob_after_breakout(closed_bars, breakout, params) is not None:
+        if not in_candidate_window:
+            log.info("%s: before C candidate window (%s IST); pending updates checked",
+                     symbol, candidate_start)
+            continue
+
+        # Cheap prefilter so 1m bars are only fetched for symbols that could
+        # actually qualify. Today's partial daily row carries the same
+        # (provider-delayed) picture as the intraday aggregate.
+        provisional = closed_bars + ([settled_today] if settled_today else [])
+        breakout = derive_active_26w_breakout(provisional)
+        if breakout is not None and first_ob_after_breakout(closed_bars, breakout, params) is not None:
             log.info("%s: first OB already confirmed; early C window ended", symbol)
             skips["ob_already_born"] += 1
             continue
-        outcome = _send_new_candidate(symbol, combined, candle, data_as_of, settled,
-                                      breakout, state, params, notifier, now=now,
-                                      state_path=state_path)
-        skips[f"candidate_{outcome}"] += 1
-        changed |= outcome in {"sent", "suppressed"}
+        if breakout is None and settled_today is not None:
+            log.info("%s: no active 26-week breakout; candidate skipped", symbol)
+            skips["no_breakout"] += 1
+            continue
+        if breakout is None:
+            log.info("%s: today's daily row is not published yet; checking intraday", symbol)
+        needs_quotes.append((symbol, ticker, closed_bars))
+
+    if needs_quotes:
+        try:
+            intraday_frames = _download([ticker for _, ticker, _ in needs_quotes],
+                                        "1d", "1m")
+        except Exception:
+            # Degrade to "no quotes": the per-symbol loop raises a loud,
+            # specific error when nothing is usable inside the window.
+            log.exception("intraday download failed; continuing with no quotes")
+            intraday_frames = {}
+    else:
+        intraday_frames = {}
+
+    for symbol, ticker, closed_bars in needs_quotes:
+        today = now.date()
+        snapshot = intraday_snapshot(intraday_frames.get(ticker), today, now)
+        if snapshot is None:
+            log.warning("%s: no yfinance intraday bars for today's session; "
+                        "C candidate skipped", symbol)
+            quote_issues.append(f"{symbol}: no same-session bar")
+            skips["no_intraday_bars"] += 1
+            continue
+        status, age = quote_status(snapshot, now)
+        bar_time = snapshot.as_of.isoformat(timespec="seconds")
+        if status in {"too-old", "other-session"}:
+            log.warning("%s: intraday quote unusable (%s; newest bar %s, %.0fs old, "
+                        "hard limit %ds); C candidate skipped",
+                        symbol, status, bar_time, age, HARD_QUOTE_STALE_SECONDS)
+            quote_issues.append(f"{symbol}: {age:.0f}s/{status}")
+            skips[f"quote_{status}"] += 1
+            continue
+        if status == "delayed":
+            log.warning("%s: quote delayed by the provider (newest bar %s, %.0fs old; "
+                        "limit %ds). Yahoo's NSE feed normally lags ~15 min, so the "
+                        "delayed bar is used and the alert states its timestamp.",
+                        symbol, bar_time, age, quote_age_limit())
+            skips["quote_delayed"] += 1
+        else:
+            log.info("%s: quote fresh (newest bar %s, %.0fs old)",
+                     symbol, bar_time, age)
+        usable_quotes += 1
+        changed |= _evaluate_candidate(symbol, closed_bars, snapshot.bar,
+                                       snapshot.as_of, False, state, params, notifier,
+                                       skips, now=now, state_path=state_path)
+
     if not daily_available:
         raise RuntimeError("No daily data available for any configured symbol")
     if in_candidate_window and usable_quotes == 0 and quote_issues:

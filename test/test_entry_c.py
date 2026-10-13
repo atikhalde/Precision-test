@@ -397,13 +397,28 @@ class ScannerOperationsTests(unittest.TestCase):
                     now=datetime(2026, 10, 13, 15, 20, tzinfo=ZoneInfo("Asia/Kolkata")))
 
     def test_no_fresh_quotes_in_window_raises(self):
-        frame = pd.DataFrame([{"Open": 100, "High": 105, "Low": 99, "Close": 102, "Volume": 100}],
-                             index=pd.to_datetime(["2026-10-12"]))
-        with patch("entry_c._cached_daily_frames", return_value={"TCS.NS": frame}), \
+        today = date(2026, 10, 13)
+        daily = add_daily_bar(flat_breakout_history(today), today,
+                              Open=102, High=105, Low=100.5, Close=101, Volume=1500)
+        with patch("entry_c._cached_daily_frames", return_value={"TCS.NS": daily}), \
              patch("entry_c._download", return_value={}):
             with self.assertRaisesRegex(RuntimeError, "No fresh intraday quotes"):
                 scan_pass(["TCS"], {"candidates": {}, "alerts_sent": {}}, Telegram("", "", True),
-                    now=datetime(2026, 10, 13, 15, 20, tzinfo=ZoneInfo("Asia/Kolkata")))
+                    now=datetime(2026, 10, 13, 15, 20, tzinfo=IST))
+
+    def test_symbols_without_breakout_never_fetch_intraday(self):
+        today = date(2026, 10, 13)
+        daily = add_daily_bar(flat_breakout_history(today), today,
+                              Open=99, High=100, Low=97, Close=99, Volume=1000)
+        with patch("entry_c._cached_daily_frames", return_value={"TCS.NS": daily}), \
+             patch("entry_c._download") as download, \
+             self.assertLogs("entry_c", level="INFO") as logs:
+            self.assertFalse(scan_pass(["TCS"], {"candidates": {}, "alerts_sent": {}},
+                                       Telegram("", "", True),
+                                       now=datetime(2026, 10, 13, 15, 20, tzinfo=IST)))
+        download.assert_not_called()  # the cheap daily prefilter rejected the symbol
+        self.assertTrue(any("no active 26-week breakout" in line for line in logs.output))
+        self.assertTrue(any("no_breakout=1" in line for line in logs.output))
 
     def test_status_delivery_failure_stays_retryable_and_propagates(self):
         record = {"symbol": "TCS", "status": "pending", "breakout_session": "2026-10-01",
@@ -468,11 +483,12 @@ class ScannerOperationsTests(unittest.TestCase):
         state = {"candidates": {}, "alerts_sent": {}}
         with patch.dict(os.environ, {"MAX_QUOTE_AGE_SECONDS": "300"}), \
              patch("entry_c._cached_daily_frames", return_value={"TCS.NS": history}), \
-             patch("entry_c._download", return_value={"TCS.NS": intraday}), \
+             patch("entry_c._download", return_value={"TCS.NS": intraday}) as download, \
              self.assertLogs("entry_c", level="WARNING") as logs:
             changed = scan_pass(["TCS"], state, notifier,
                                 now=datetime(2026, 10, 12, 15, 20, tzinfo=IST))
         self.assertTrue(changed)
+        download.assert_called_once_with(["TCS.NS"], "1d", "1m")  # only breakout candidates fetch 1m
         self.assertTrue(any("delayed by the provider" in line for line in logs.output))
         self.assertEqual(len(notifier.messages), 1)
         record = next(iter(state["candidates"].values()))
