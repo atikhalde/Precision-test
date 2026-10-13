@@ -1,0 +1,103 @@
+name: scan-entry-c
+
+on:
+  schedule:
+    # UTC: 08:30–16:25 IST weekdays. Extra edge polls safely skip closed markets.
+    # Actions schedules may be delayed; use a VPS for dependable late-session polling.
+    - cron: '*/5 3-10 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Print alerts only; do not send or update the live ledger'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+# Serialize live/manual scans so two runners cannot send from the same old ledger.
+concurrency:
+  group: entry-c-live-scanner
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    # Only main may operate the live alert ledger. PRs are covered by tests.yml.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '0' }}
+      C_SIGNAL_START: ${{ vars.C_SIGNAL_START || '15:15' }}
+      MAX_QUOTE_AGE_SECONDS: ${{ vars.MAX_QUOTE_AGE_SECONDS || '300' }}
+      ACCOUNT_CAPITAL_INR: ${{ vars.ACCOUNT_CAPITAL_INR }}
+      RISK_PER_TRADE_PCT: ${{ vars.RISK_PER_TRADE_PCT || '1.0' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Find latest persistent C ledger
+        id: ledger
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Artifacts are newest-first. Pagination avoids unrelated test artifacts
+            // hiding the ledger. Never silently start over if the latest has expired.
+            for await (const response of github.paginate.iterator(
+              github.rest.actions.listArtifactsForRepo,
+              { ...context.repo, name: 'entry-c-live-state', per_page: 100 }
+            )) {
+              const artifact = response.data.find(a => a.name === 'entry-c-live-state');
+              if (!artifact) continue;
+              if (artifact.expired) throw new Error('C ledger expired. Restore the ledger before enabling live scans.');
+              core.setOutput('artifact_id', String(artifact.id));
+              core.setOutput('run_id', String(artifact.workflow_run.id));
+              core.info(`Restoring C ledger from run ${artifact.workflow_run.id}`);
+              return;
+            }
+            core.info('No previous C ledger: first-run initialization. Do not delete live-state artifacts.');
+
+      - name: Restore persistent C ledger
+        if: steps.ledger.outputs.artifact_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ steps.ledger.outputs.artifact_id }}
+          merge-multiple: true
+          path: .
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.ledger.outputs.run_id }}
+
+      - name: Scan NSE symbols and send qualifying C alerts
+        id: scan
+        run: python entry_c.py --symbols-file symbols.txt --state-file state_c.json --once
+
+      - name: Preserve live C ledger, including partial successful deliveries
+        if: ${{ always() && (steps.scan.outcome == 'success' || steps.scan.outcome == 'failure') && env.DRY_RUN == '0' && hashFiles('state_c.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: entry-c-live-state
+          path: state_c.json
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Explain scan result
+        if: always()
+        env:
+          SCAN_OUTCOME: ${{ steps.scan.outcome }}
+        run: |
+          {
+            echo '## Entry C scanner'
+            echo "- Scan step: ${SCAN_OUTCOME:-not started}"
+            echo "- Dry run: $DRY_RUN"
+            echo "- Candidate window starts: $C_SIGNAL_START IST; market closes 15:30 IST."
+            echo '- A successful scan does not imply a qualifying candidate. See per-symbol reasons in the scan log.'
+            echo '- GitHub Actions timing is best-effort. Maintain a VPS scanner for reliable late-session coverage.'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,4 +1,6 @@
 import unittest
+import json
+import os
 from contextlib import redirect_stdout
 from datetime import date, datetime, time as dt_time, timedelta
 from io import StringIO
@@ -19,11 +21,14 @@ from entry_c import (
     derive_active_26w_breakout,
     is_potential_origin,
     load_state,
+    load_symbols,
+    main,
     scan_pass,
     seconds_until_next_open,
     send_daily_once,
     status_message,
     target_for_candidate,
+    update_pending,
 )
 from ob_precision import Bar, OBParams, replay
 
@@ -268,6 +273,110 @@ class BreakoutAndReplayTests(unittest.TestCase):
         self.assertIn("Target:", notifier.messages[0])
         self.assertIn("Time stop: 90", notifier.messages[0])
 
+
+
+class ScannerOperationsTests(unittest.TestCase):
+    def test_default_watchlist_is_not_empty(self):
+        symbols = load_symbols(Path(__file__).resolve().parents[1] / "symbols.txt")
+        self.assertTrue(symbols)
+        self.assertEqual(len(symbols), len(set(symbols)))
+
+    def test_corrupt_ledger_fails_closed(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            path.write_text("not JSON")
+            with self.assertRaisesRegex(RuntimeError, "refusing to reset"):
+                load_state(path)
+            self.assertEqual(path.read_text(), "not JSON")
+
+    def test_invalid_ledger_fields_fail_closed(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            for field in ("candidates", "alerts_sent"):
+                path.write_text(json.dumps({field: []}))
+                with self.assertRaisesRegex(RuntimeError, "refusing to reset"):
+                    load_state(path)
+
+    def test_missing_ledger_initializes_empty(self):
+        with TemporaryDirectory() as directory:
+            self.assertEqual(load_state(Path(directory) / "missing.json")["alerts_sent"], {})
+
+    def test_once_scan_exception_returns_failure(self):
+        with TemporaryDirectory() as directory, patch("dotenv.load_dotenv"), \
+             patch.dict(os.environ, {}, clear=True), \
+             patch("entry_c.scan_pass", side_effect=RuntimeError("provider unavailable")):
+            path = Path(directory) / "state.json"
+            self.assertEqual(main(["--symbols", "TCS", "--once", "--dry-run",
+                                   "--state-file", str(path)]), 1)
+            self.assertFalse(path.exists())
+
+    def test_live_first_run_persists_empty_ledger(self):
+        with TemporaryDirectory() as directory, patch("dotenv.load_dotenv"), \
+             patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test", "TELEGRAM_CHAT_ID": "test"}, clear=True), \
+             patch("entry_c.scan_pass", return_value=False):
+            path = Path(directory) / "state.json"
+            self.assertEqual(main(["--symbols", "TCS", "--once", "--state-file", str(path)]), 0)
+            self.assertEqual(load_state(path)["alerts_sent"], {})
+
+    def test_main_does_not_overwrite_corrupt_ledger(self):
+        with TemporaryDirectory() as directory, patch("dotenv.load_dotenv"), \
+             patch.dict(os.environ, {}, clear=True):
+            path = Path(directory) / "state.json"
+            path.write_text("corrupt")
+            self.assertEqual(main(["--symbols", "TCS", "--once", "--dry-run",
+                                   "--state-file", str(path)]), 2)
+            self.assertEqual(path.read_text(), "corrupt")
+
+    def test_market_closed_does_not_download(self):
+        with patch("entry_c._download") as download, patch("entry_c._cached_daily_frames") as daily:
+            self.assertFalse(scan_pass(["TCS"], {}, Telegram("", "", True),
+                now=datetime(2026, 10, 13, 16, 0, tzinfo=ZoneInfo("Asia/Kolkata"))))
+            download.assert_not_called()
+            daily.assert_not_called()
+
+    def test_complete_daily_data_outage_raises(self):
+        with patch("entry_c._cached_daily_frames", return_value={}), \
+             patch("entry_c._download", return_value={}):
+            with self.assertRaisesRegex(RuntimeError, "No daily data"):
+                scan_pass(["TCS"], {"candidates": {}, "alerts_sent": {}}, Telegram("", "", True),
+                    now=datetime(2026, 10, 13, 15, 20, tzinfo=ZoneInfo("Asia/Kolkata")))
+
+    def test_download_exception_propagates(self):
+        with patch("entry_c._cached_daily_frames", side_effect=RuntimeError("download broke")):
+            with self.assertRaisesRegex(RuntimeError, "download broke"):
+                scan_pass(["TCS"], {}, Telegram("", "", True),
+                    now=datetime(2026, 10, 13, 15, 20, tzinfo=ZoneInfo("Asia/Kolkata")))
+
+    def test_no_fresh_quotes_in_window_raises(self):
+        frame = pd.DataFrame([{"Open": 100, "High": 105, "Low": 99, "Close": 102, "Volume": 100}],
+                             index=pd.to_datetime(["2026-10-12"]))
+        with patch("entry_c._cached_daily_frames", return_value={"TCS.NS": frame}), \
+             patch("entry_c._download", return_value={}):
+            with self.assertRaisesRegex(RuntimeError, "No fresh intraday quotes"):
+                scan_pass(["TCS"], {"candidates": {}, "alerts_sent": {}}, Telegram("", "", True),
+                    now=datetime(2026, 10, 13, 15, 20, tzinfo=ZoneInfo("Asia/Kolkata")))
+
+    def test_status_delivery_failure_stays_retryable_and_propagates(self):
+        record = {"symbol": "TCS", "status": "pending", "breakout_session": "2026-10-01",
+                  "candidate_session": "2026-10-12", "level": 100.0}
+        state = {"candidates": {"candidate": record}, "alerts_sent": {}}
+        notifier = SimpleNamespace(send=lambda text: (_ for _ in ()).throw(RuntimeError("delivery failed")))
+        with patch("entry_c._event_for_record", return_value=None), \
+             patch("entry_c.candidate_resolution", return_value=("confirmed", "selected")), \
+             patch("entry_c.status_message", return_value="status plan"):
+            with self.assertRaisesRegex(RuntimeError, "delivery failed"):
+                update_pending("TCS", [], state, OBParams(), notifier)
+        self.assertEqual(record["status"], "pending")
+        self.assertEqual(state["alerts_sent"], {})
+
+    def test_pre_window_skip_is_logged(self):
+        frame = pd.DataFrame([{"Open": 100, "High": 105, "Low": 99, "Close": 102, "Volume": 100}],
+                             index=pd.to_datetime(["2026-10-12"]))
+        with patch("entry_c._cached_daily_frames", return_value={"TCS.NS": frame}), \
+             patch("entry_c._download", return_value={}), self.assertLogs("entry_c", level="INFO") as logs:
+            self.assertFalse(scan_pass(["TCS"], {"candidates": {}, "alerts_sent": {}}, Telegram("", "", True),
+                now=datetime(2026, 10, 13, 14, 0, tzinfo=ZoneInfo("Asia/Kolkata"))))
+        self.assertTrue(any("before C candidate window" in line for line in logs.output))
 
 if __name__ == "__main__":
     unittest.main()

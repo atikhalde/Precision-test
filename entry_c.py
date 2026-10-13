@@ -229,13 +229,12 @@ def load_state(path: Path) -> dict[str, Any]:
     except FileNotFoundError:
         data = {}
     except (OSError, json.JSONDecodeError, ValueError) as exc:
-        log.warning("Unable to read state file %s: %s; starting a fresh C state", path, exc)
-        data = {}
+        raise RuntimeError(f"Unable to read C ledger {path}; refusing to reset alert history") from exc
     data.setdefault("schema", 1)
-    if not isinstance(data.get("candidates"), dict):
-        data["candidates"] = {}
-    if not isinstance(data.get("alerts_sent"), dict):
-        data["alerts_sent"] = {}
+    for field in ("candidates", "alerts_sent"):
+        data.setdefault(field, {})
+        if not isinstance(data[field], dict):
+            raise RuntimeError(f"Invalid C ledger field {field}; refusing to reset alert history")
     return data
 
 
@@ -417,7 +416,7 @@ def update_pending(symbol: str, closed_bars: list[Bar], state: dict[str, Any],
                 record["status"] = "pending"
                 record.pop("status_reason", None)
                 log.warning("Telegram status send failed for %s: %s", key, exc)
-                continue
+                raise
             changed = True
     return changed
 
@@ -627,8 +626,10 @@ def _send_new_candidate(symbol: str, bars: list[Bar], live: IntradaySnapshot,
     candidate_day = str(live.bar.time)[:10]
     key = candidate_id(symbol, breakout.session, candidate_day)
     if key in state["candidates"]:
+        log.info("%s: candidate already tracked for this session", symbol)
         return False
     if not is_potential_origin(live.bar, breakout, params):
+        log.info("%s: candle is not a qualifying bearish/neutral origin above 26W level", symbol)
         return False
 
     target = target_for_candidate(bars, breakout.session, candidate_day,
@@ -701,15 +702,24 @@ def scan_pass(symbols: list[str], state: dict[str, Any], notifier: Telegram,
 
     try:
         daily_frames = _cached_daily_frames(tickers, now.date())
-        intraday_frames = _download(tickers, "1d", "1m")
-    except Exception as exc:
-        log.warning("yfinance download failed: %s", exc)
-        return False
+        intraday_frames = (_download(tickers, "1d", "1m")
+                           if now.timetz().replace(tzinfo=None) >= candidate_start else {})
+    except Exception:
+        log.exception("yfinance download failed")
+        raise
 
+    log.info("Scan started: %d symbols at %s; candidates from %s IST",
+             len(yahoo_by_symbol), now.isoformat(timespec="seconds"), candidate_start)
     changed = False
+    daily_available = 0
+    fresh_available = 0
     for symbol, ticker in yahoo_by_symbol.items():
         daily_frame = daily_frames.get(ticker)
         all_daily = daily_bars_from_frame(daily_frame)
+        if not all_daily:
+            log.warning("%s: daily data unavailable; cannot evaluate C", symbol)
+            continue
+        daily_available += 1
         today = now.date()
         # A daily row for today can be partial; exclude it while the market is
         # open and use the intraday aggregate instead.
@@ -718,24 +728,35 @@ def scan_pass(symbols: list[str], state: dict[str, Any], notifier: Telegram,
         changed |= update_pending(symbol, closed_bars, state, params, notifier,
                                   now=now, state_path=state_path)
 
-        if not _is_market_time(now) or now.timetz().replace(tzinfo=None) < candidate_start:
+        if now.timetz().replace(tzinfo=None) < candidate_start:
+            log.info("%s: before C candidate window (%s IST); pending updates checked",
+                     symbol, candidate_start)
             continue
         snapshot = intraday_snapshot(intraday_frames.get(ticker), today, now)
         if snapshot is None or not _is_fresh(snapshot, now):
             log.info("%s: no fresh yfinance intraday bar; C candidate skipped", symbol)
             continue
+        fresh_available += 1
         combined = closed_bars + [snapshot.bar]
         breakout = derive_active_26w_breakout(combined)
         if breakout is None:
+            log.info("%s: no active 26-week breakout; candidate skipped", symbol)
             continue
 
         # If a previous closed bar already birthed the cycle's first OB, the
         # C candidate window for that cycle is over. C can only anticipate it.
         if first_ob_after_breakout(closed_bars, breakout, params) is not None:
+            log.info("%s: first OB already confirmed; early C window ended", symbol)
             continue
         changed |= _send_new_candidate(symbol, combined, snapshot, breakout,
                                        state, params, notifier, now=now,
                                        state_path=state_path)
+    if not daily_available:
+        raise RuntimeError("No daily data available for any configured symbol")
+    if now.timetz().replace(tzinfo=None) >= candidate_start and not fresh_available:
+        raise RuntimeError("No fresh intraday quotes available during the C candidate window")
+    log.info("Scan complete: %d symbols; daily_available=%d fresh_quotes=%d state_changed=%s",
+             len(yahoo_by_symbol), daily_available, fresh_available, changed)
     return changed
 
 
@@ -790,7 +811,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     state_path = Path(args.state_file)
-    state = load_state(state_path)
+    try:
+        state = load_state(state_path)
+    except RuntimeError as exc:
+        log.error("%s", exc)
+        return 2
+    if not dry_run:
+        # Persist even an empty first-run ledger so Actions can restore it.
+        save_state(state_path, state)
+    log.info("Scanner configured: symbols=%s dry_run=%s state=%s",
+             ",".join(symbols), dry_run, state_path)
     poll_seconds = max(15, int(args.poll_seconds))
     candidate_start = _time_from_env("C_SIGNAL_START", DEFAULT_C_START)
     while True:
@@ -812,6 +842,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         except Exception:
             log.exception("Entry C scan pass failed")
+            if args.once:
+                return 1
         if args.once:
             return 0
         time_module.sleep(poll_seconds)
