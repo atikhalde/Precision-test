@@ -73,5 +73,12 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           # Key facts as annotations: visible on the run page and readable from
-          # the annotations API without downloading the raw log.
-          grep -E '^REPORT\|' diag_probe.txt | sed 's/^/::notice title=entry-c diag::/' || true
+          # the annotations API without downloading the raw log. GitHub stores a
+          # limited number of annotations per step, so the probe emits at most
+          # ten consolidated REPORT lines.
+          if grep -qE '^REPORT\|' diag_probe.txt; then
+            grep -E '^REPORT\|' diag_probe.txt | sed 's/^/::notice title=entry-c diag::/'
+          else
+            echo "::warning title=entry-c diag::probe produced no REPORT lines"
+            tail -15 diag_probe.txt | sed 's/^/::warning title=entry-c diag::/'
+          fi

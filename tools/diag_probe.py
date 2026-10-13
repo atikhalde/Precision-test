@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import math
 import os
 import sys
 import traceback
@@ -28,6 +29,46 @@ sys.path.insert(0, str(ROOT))
 import entry_c as ec  # noqa: E402
 
 REPORT = "REPORT|"
+# GitHub stores a limited number of annotations per step, so the report lines
+# are consolidated: config (1) + one per symbol + one per replay.
+_MAX_REPORT_LINES = 10
+
+
+class _Capture(logging.Handler):
+    """Collect the scanner's own log lines so the replay verdict is quotable."""
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.INFO)
+        self.lines: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            self.lines.append(record.getMessage())
+        except Exception:  # pragma: no cover - defensive
+            pass
+
+    def tally(self) -> str:
+        summary = next((line for line in self.lines if line.startswith("Scan complete")), "")
+        notable = [line for line in self.lines
+                   if "delayed by the provider" in line or "unusable" in line
+                   or "no yfinance intraday bars" in line]
+        parts = [summary]
+        if notable:
+            parts.append(f"{len(notable)} quote warning(s)")
+        return " | ".join(part for part in parts if part)
+
+
+class _RecordingTelegram(ec.Telegram):
+    """Dry-run notifier that still records what would have been sent."""
+
+    def __init__(self) -> None:
+        super().__init__("", "", dry_run=True)
+        self.messages: list[str] = []
+
+    def send(self, text: str) -> bool:
+        super().send(text)
+        self.messages.append(text)
+        return True
 
 
 def report(text: str) -> None:
@@ -66,18 +107,19 @@ def env_report(now: datetime) -> None:
     # Never print the values; presence and length only.
     print(f"TELEGRAM_BOT_TOKEN   : {'SET' if token else 'MISSING'} (len={len(token)})")
     print(f"TELEGRAM_CHAT_ID     : {'SET' if chat else 'MISSING'} (len={len(chat)})")
-    report(f"config: C_SIGNAL_START={os.getenv('C_SIGNAL_START', '15:15')} "
-           f"post_close_until={ec.post_close_until_from_env() or 'disabled'} "
-           f"quote_age_limit={ec.quote_age_limit()}s")
-    report(f"credentials: token={'SET' if token else 'MISSING'} "
-           f"chat={'SET' if chat else 'MISSING'} "
-           f"(a missing credential makes live scans exit 2)")
+    symbols = ec.load_symbols(Path(os.getenv("SYMBOLS_FILE", str(ROOT / "symbols.txt"))))
+    report(f"config: start={os.getenv('C_SIGNAL_START', '15:15')} "
+           f"close_until={ec.post_close_until_from_env() or 'disabled'} "
+           f"age_limit={ec.quote_age_limit()}s hard_limit={ec.HARD_QUOTE_STALE_SECONDS}s "
+           f"token={'SET' if token else 'MISSING'} chat={'SET' if chat else 'MISSING'} "
+           f"dry_run={dry_run} symbols={len(symbols)}")
 
 
-def feed_probe(symbols: list[str], now: datetime) -> None:
+def feed_probe(symbols: list[str], now: datetime) -> dict[str, tuple[datetime, float]]:
     """Raw chart-API view: how delayed is the feed for each symbol right now?"""
     section("RAW YAHOO CHART-API PROBE (feed delay)")
     import requests
+    delays: dict[str, tuple[datetime, float]] = {}
     for symbol in symbols:
         ticker = ec.yahoo_ticker(symbol)
         url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
@@ -101,15 +143,15 @@ def feed_probe(symbols: list[str], now: datetime) -> None:
                       f"(age {(now - rmt_dt).total_seconds():.0f}s)")
             if last_i is not None:
                 last_bar = datetime.fromtimestamp(stamps[last_i], ec.IST)
-                status, age = "session", (now - last_bar).total_seconds()
+                age = (now - last_bar).total_seconds()
+                delays[symbol] = (last_bar, age)
                 print(f"  last 1m bar w/ data  : {last_bar.isoformat(timespec='seconds')} "
                       f"(age {age:.0f}s)")
-                report(f"{symbol}: last 1m bar with data {last_bar.strftime('%H:%M')} IST, "
-                       f"age {age / 60:.1f} min (provider delay)")
             print(f"  bars returned        : {len(stamps)}")
         except Exception as exc:
             print(f"\n{symbol} ({ticker}): probe failed: {exc!r}")
-            report(f"{symbol}: chart-api probe failed: {exc!r}")
+            delays[symbol] = (now, float("nan"))
+    return delays
 
 
 def _fmt_bar(bar: ec.Bar | None) -> str:
@@ -119,9 +161,12 @@ def _fmt_bar(bar: ec.Bar | None) -> str:
             f"L={bar.low:.2f} C={bar.close:.2f} V={bar.volume:.0f}")
 
 
-def strategy_report(symbols: list[str], now: datetime) -> dict[str, object]:
+def strategy_report(symbols: list[str], now: datetime,
+                    delays: dict[str, tuple[datetime, float]] | None = None
+                    ) -> dict[str, object]:
     """Per-symbol view of the exact C decision inputs."""
     section("PER-SYMBOL C DECISION INPUTS")
+    delays = delays or {}
     params = ec.OBParams()
     tickers = [ec.yahoo_ticker(s) for s in symbols]
     daily = ec._download(tickers, ec.DEFAULT_LOOKBACK, "1d")
@@ -153,16 +198,17 @@ def strategy_report(symbols: list[str], now: datetime) -> dict[str, object]:
 
             combined = closed + ([snap.bar] if snap else ([today_bar] if today_bar else []))
             breakout = ec.derive_active_26w_breakout(combined)
+            candle = snap.bar if snap else today_bar
             if breakout is None:
                 print("  active 26W breakout: NONE -> C candidate impossible for this symbol")
-                report(f"{symbol}: no active 26-week breakout "
-                       f"(last close {combined[-1].close:.2f} if any) -> no C candidate possible")
+                verdict = (f"no active 26-week breakout (last close "
+                           f"{combined[-1].close:.2f}) -> no C candidate possible")
             else:
                 print(f"  active 26W breakout: session={breakout.session} "
                       f"level={breakout.level:.2f} week_close={breakout.close:.2f}")
-                candle = snap.bar if snap else today_bar
                 if candle is None:
                     print("  candidate candle  : NONE")
+                    verdict = f"breakout {breakout.session} @ {breakout.level:.2f}; no candle"
                 else:
                     rng = max(candle.high - candle.low, params.mintick)
                     bearish = candle.close < candle.open
@@ -175,12 +221,16 @@ def strategy_report(symbols: list[str], now: datetime) -> dict[str, object]:
                     print(f"    bearish={bearish} neutral={neutral} "
                           f"close>level={above} open>low={zone}")
                     print(f"    -> is_potential_origin = {qualifies}")
-                    report(f"{symbol}: active 26W breakout {breakout.session} "
-                           f"level={breakout.level:.2f}; candle {_fmt_bar(candle)}; "
-                           f"candidate={qualifies}")
+                    verdict = (f"breakout {breakout.session} @ {breakout.level:.2f}; "
+                               f"candle {_fmt_bar(candle)}; candidate={qualifies}")
                 first_ob = ec.first_ob_after_breakout(closed, breakout, params)
                 print(f"  first OB already born: "
                       f"{first_ob.zone.born_session if first_ob else 'no'}")
+            last_bar, age = delays.get(symbol, (None, float("nan")))
+            delay_text = ("feed_delay=unknown" if last_bar is None or math.isnan(age)
+                          else f"feed_delay={age / 60:.1f}min last_bar="
+                               f"{last_bar.strftime('%H:%M')}")
+            report(f"{symbol}: {delay_text}; {verdict}")
             out[symbol] = {
                 "daily_bars": len(all_daily),
                 "today_row": _fmt_bar(today_bar),
@@ -223,21 +273,25 @@ def replay_scan(symbols: list[str], now: datetime, quote_lag: int, label: str,
             return trimmed
         ec._download = lagged  # type: ignore[assignment]
 
+    capture = _Capture()
+    logging.getLogger().addHandler(capture)
     try:
         state = {"schema": 1, "candidates": {}, "alerts_sent": {}}
-        notifier = ec.Telegram("", "", dry_run=True)
+        notifier = _RecordingTelegram()
         changed = ec.scan_pass(symbols, state, notifier, now=now,
                               candidate_start=ec._time_from_env("C_SIGNAL_START",
                                                                 ec.DEFAULT_C_START))
         print(f"\nscan_pass completed. state_changed={changed}")
         print(f"candidates that would be tracked: {list(state['candidates'])}")
-        report(f"replay {label}: scan_pass completed, state_changed={changed}, "
-               f"candidates={list(state['candidates']) or 'none'}")
+        report(f"replay({label}): OK state_changed={changed} "
+               f"candidates={list(state['candidates']) or 'none'} "
+               f"alerts={len(notifier.messages)} | {capture.tally()}")
     except Exception as exc:
         print("\n>>> scan_pass RAISED:")
         traceback.print_exc()
-        report(f"replay {label}: scan_pass RAISED {exc!r}")
+        report(f"replay({label}): RAISED {exc!r} | {capture.tally()}")
     finally:
+        logging.getLogger().removeHandler(capture)
         ec._download = real_download  # type: ignore[assignment]
         if patched_env:
             os.environ.pop("MAX_QUOTE_AGE_SECONDS", None)
@@ -259,11 +313,9 @@ def main() -> int:
     now = datetime.now(ec.IST)
     env_report(now)
     print(f"symbols              : {symbols}")
-    report(f"symbols: {','.join(symbols)} ({len(symbols)} configured; alerts require an "
-           f"active 26-week breakout, so a small watchlist rarely qualifies)")
 
-    feed_probe(symbols, now)
-    strategy_report(symbols, now)
+    delays = feed_probe(symbols, now)
+    strategy_report(symbols, now, delays)
 
     if args.as_of:
         hh, mm = _hhmm(args.as_of)
